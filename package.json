@@ -1,0 +1,17 @@
+{
+  "name": "web-resume",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "concurrently -n api,web -c blue,green \"APP_ORIGIN=http://127.0.0.1:5173 ./.venv/bin/uvicorn backend.app.main:app --reload --reload-dir backend --host 127.0.0.1 --port 8000\" \"npm --prefix frontend run dev\"",
+    "dev:open": "concurrently -n api,web,browser -c blue,green,magenta \"APP_ORIGIN=http://127.0.0.1:5173 ./.venv/bin/uvicorn backend.app.main:app --reload --reload-dir backend --host 127.0.0.1 --port 8000\" \"npm --prefix frontend run dev\" \"sh -c 'sleep 2 && open http://127.0.0.1:5173'\"",
+    "build": "npm --prefix frontend run build",
+    "start": "APP_ORIGIN=http://127.0.0.1:8000 ./.venv/bin/uvicorn backend.app.main:app --host 127.0.0.1 --port 8000",
+    "start:open": "concurrently -n app,browser -c blue,magenta \"APP_ORIGIN=http://127.0.0.1:8000 ./.venv/bin/uvicorn backend.app.main:app --host 127.0.0.1 --port 8000\" \"sh -c 'sleep 2 && open http://127.0.0.1:8000'\"",
+    "prod:open": "npm run build && npm run start:open",
+    "test": "./.venv/bin/pytest backend/tests -q && npm --prefix frontend run test"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

@@ -1,0 +1,125 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PROJECT_DIR="/Users/dimbaby/Desktop/新简历/web-resume"
+PROD_URL="http://127.0.0.1:8000"
+DEV_URL="http://127.0.0.1:5173"
+HEALTH_URL="http://127.0.0.1:8000/api/health"
+
+usage() {
+  cat <<'EOF'
+webresume - 本地简历管理器命令
+
+用法：
+  webresume --start      生产模式：构建、启动服务，并自动打开网页
+  webresume --dev        开发模式：启动前后端热更新服务，并自动打开网页
+  webresume --status     查看当前服务状态
+  webresume --stop       停止当前本地服务
+  webresume --help       查看帮助
+
+常用：
+  webresume --start
+
+服务运行期间请保持终端窗口打开；按 Control+C 停止服务。
+EOF
+}
+
+ensure_project() {
+  if [[ ! -d "$PROJECT_DIR" ]]; then
+    echo "项目目录不存在：$PROJECT_DIR" >&2
+    exit 1
+  fi
+  if [[ ! -x "$PROJECT_DIR/.venv/bin/uvicorn" ]]; then
+    echo "缺少后端虚拟环境，请先在项目目录执行首次安装命令。" >&2
+    echo "cd '$PROJECT_DIR' && python3 -m venv .venv && ./.venv/bin/pip install -r backend/requirements.txt" >&2
+    exit 1
+  fi
+  if [[ ! -d "$PROJECT_DIR/node_modules" || ! -d "$PROJECT_DIR/frontend/node_modules" ]]; then
+    echo "缺少前端依赖，请先在项目目录执行 npm install 和 npm --prefix frontend install。" >&2
+    exit 1
+  fi
+}
+
+is_running() {
+  curl -fsS --max-time 1 "$HEALTH_URL" >/dev/null 2>&1
+}
+
+open_when_ready() {
+  local url="$1"
+  for _ in $(seq 1 60); do
+    if is_running; then
+      open "$url" >/dev/null 2>&1 || true
+      return 0
+    fi
+    sleep 0.25
+  done
+  echo "服务启动超时，请查看终端日志。" >&2
+  return 1
+}
+
+start_prod() {
+  ensure_project
+  if is_running; then
+    echo "Web Resume 已在运行，正在打开网页：$PROD_URL"
+    open "$PROD_URL" >/dev/null 2>&1 || true
+    return 0
+  fi
+  cd "$PROJECT_DIR"
+  echo "正在构建生产版本..."
+  npm run build
+  echo "正在启动 Web Resume：$PROD_URL"
+  open_when_ready "$PROD_URL" &
+  APP_ORIGIN="$PROD_URL" ./.venv/bin/uvicorn backend.app.main:app --host 127.0.0.1 --port 8000
+}
+
+start_dev() {
+  ensure_project
+  cd "$PROJECT_DIR"
+  npm run dev:open
+}
+
+status() {
+  if is_running; then
+    echo "运行中：$PROD_URL"
+  else
+    echo "未运行。"
+  fi
+}
+
+stop_server() {
+  if ! is_running; then
+    echo "当前没有检测到 Web Resume 服务。"
+    return 0
+  fi
+  local pids
+  pids="$(lsof -tiTCP:8000 -sTCP:LISTEN || true)"
+  if [[ -n "$pids" ]]; then
+    kill $pids
+    echo "已停止 Web Resume 服务。"
+  else
+    echo "检测到健康接口，但没有找到 8000 端口监听进程。"
+  fi
+}
+
+case "${1:---help}" in
+  --start|start)
+    start_prod
+    ;;
+  --dev|dev)
+    start_dev
+    ;;
+  --status|status)
+    status
+    ;;
+  --stop|stop)
+    stop_server
+    ;;
+  --help|-h|help)
+    usage
+    ;;
+  *)
+    echo "未知参数：$1" >&2
+    usage >&2
+    exit 2
+    ;;
+esac
