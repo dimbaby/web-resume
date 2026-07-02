@@ -8,7 +8,16 @@
 
 <https://github.com/dimbaby/web-resume>
 
-对方可以在终端执行：
+`git clone` 会把项目下载到当前终端所在目录下的 `web-resume` 文件夹。例如在桌面执行，就会得到 `Desktop/web-resume`。
+
+### 运行要求
+
+- Git
+- Python 3.9+
+- Node.js 18+
+- Google Chrome，用于导出 PDF
+
+### macOS / Linux
 
 ```bash
 git clone https://github.com/dimbaby/web-resume.git
@@ -22,9 +31,29 @@ npm run prod:open
 
 然后浏览器会打开 <http://127.0.0.1:8000>。
 
-当前项目主要按 macOS 本地使用设计；PDF 导出默认使用 macOS 的 Google Chrome 路径。如果对方的 Chrome 不在默认位置，可以通过 `CHROME_PATH` 指定 Chrome 可执行文件路径。
+### Windows PowerShell
+
+```powershell
+git clone https://github.com/dimbaby/web-resume.git
+cd web-resume
+py -3 -m venv .venv
+.\.venv\Scripts\python -m pip install -r backend\requirements.txt
+npm install
+npm --prefix frontend install
+npm run prod:open
+```
+
+然后浏览器会打开 <http://127.0.0.1:8000>。
+
+### 关于 WSL
+
+WSL 是 Windows Subsystem for Linux，意思是在 Windows 里运行一个 Linux 环境。这个项目现在支持 Windows 原生 PowerShell 安装运行，不强制使用 WSL；熟悉 WSL 的用户也可以在 WSL 里按 Linux 流程运行。
+
+PDF 导出会自动尝试寻找常见位置的 Google Chrome。如果 Chrome 不在默认位置，可以通过 `CHROME_PATH` 指定 Chrome 可执行文件路径。
 
 ## 首次安装
+
+macOS / Linux：
 
 ```bash
 python3 -m venv .venv
@@ -33,7 +62,16 @@ npm install
 npm --prefix frontend install
 ```
 
-本机需要 Google Chrome；PDF 导出会自动使用 `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`。
+Windows PowerShell：
+
+```powershell
+py -3 -m venv .venv
+.\.venv\Scripts\python -m pip install -r backend\requirements.txt
+npm install
+npm --prefix frontend install
+```
+
+本机需要 Google Chrome；PDF 导出会自动寻找常见 Chrome 安装路径，也可以用 `CHROME_PATH` 手动指定。
 
 ## 命令行运行
 
@@ -51,17 +89,28 @@ webresume --start
 webresume --dev      # 开发模式，自动打开 http://127.0.0.1:5173
 webresume --status   # 查看服务状态
 webresume --stop     # 停止服务
+webresume --test     # 运行测试
 ```
 
 如果还没有安装全局命令，也可以在项目目录中运行下面的 npm 命令。
 
 也可以直接在项目目录使用内置命令：
 
+macOS / Linux：
+
 ```bash
 ./bin/webresume --start
 ```
 
+Windows PowerShell：
+
+```powershell
+.\bin\webresume.cmd --start
+```
+
 如果想把它安装成全局命令，可以在项目目录执行：
+
+macOS / Linux：
 
 ```bash
 mkdir -p "$HOME/.local/bin"
@@ -69,6 +118,8 @@ ln -sfn "$PWD/bin/webresume" "$HOME/.local/bin/webresume"
 ```
 
 如果随后提示 `webresume: command not found`，需要把 `~/.local/bin` 加入 shell 的 `PATH`。
+
+Windows 用户也可以直接使用 `npm run prod:open`，通常不需要安装全局命令。
 
 开发模式：
 

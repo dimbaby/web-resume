@@ -11,6 +11,8 @@ from .settings import APP_ORIGIN, CHROME_PATH, EXPORT_DIR, ensure_directories
 async def export_pdf(resume_id: str, title: str) -> tuple[Path, str]:
     ensure_directories()
     output_path = EXPORT_DIR / f"{resume_id}.pdf"
+    if not CHROME_PATH:
+        raise RuntimeError("未找到 Google Chrome。请设置 CHROME_PATH 指向可执行文件。")
     chrome = Path(CHROME_PATH)
     if not chrome.exists():
         raise RuntimeError(
@@ -47,4 +49,3 @@ async def export_pdf(resume_id: str, title: str) -> tuple[Path, str]:
     filename = f"{title or '简历'}.pdf"
     content_disposition = f"attachment; filename*=UTF-8''{quote(filename)}"
     return output_path, content_disposition
-

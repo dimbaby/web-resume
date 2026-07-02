@@ -1,0 +1,315 @@
+#!/usr/bin/env node
+import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const scriptDir = dirname(fileURLToPath(import.meta.url));
+const projectDir = dirname(scriptDir);
+const isWindows = process.platform === "win32";
+const npmCommand = isWindows ? "npm.cmd" : "npm";
+const prodUrl = "http://127.0.0.1:8000";
+const devUrl = "http://127.0.0.1:5173";
+const healthUrl = "http://127.0.0.1:8000/api/health";
+
+function usage() {
+  console.log(`webresume - 本地简历管理器命令
+
+用法：
+  webresume --start      生产模式：构建、启动服务，并自动打开网页
+  webresume --dev        开发模式：启动前后端热更新服务，并自动打开网页
+  webresume --serve      仅启动生产服务，不重新构建
+  webresume --test       运行后端和前端测试
+  webresume --status     查看当前服务状态
+  webresume --stop       停止当前本地服务
+  webresume --help       查看帮助
+
+常用：
+  webresume --start
+
+服务运行期间请保持终端窗口打开；按 Control+C 停止服务。`);
+}
+
+function venvPythonPath() {
+  return isWindows
+    ? join(projectDir, ".venv", "Scripts", "python.exe")
+    : join(projectDir, ".venv", "bin", "python");
+}
+
+function ensureProject() {
+  if (!existsSync(projectDir)) {
+    throw new Error(`项目目录不存在：${projectDir}`);
+  }
+  if (!existsSync(venvPythonPath())) {
+    throw new Error(
+      [
+        "缺少后端虚拟环境，请先执行首次安装命令。",
+        isWindows
+          ? "Windows: py -3 -m venv .venv && .\\.venv\\Scripts\\python -m pip install -r backend\\requirements.txt"
+          : "macOS/Linux: python3 -m venv .venv && ./.venv/bin/pip install -r backend/requirements.txt",
+      ].join("\\n"),
+    );
+  }
+  if (
+    !existsSync(join(projectDir, "node_modules")) ||
+    !existsSync(join(projectDir, "frontend", "node_modules"))
+  ) {
+    throw new Error("缺少前端依赖，请先执行 npm install 和 npm --prefix frontend install。");
+  }
+}
+
+function spawnInherit(command, args, options = {}) {
+  const child = spawn(command, args, {
+    cwd: projectDir,
+    env: process.env,
+    stdio: "inherit",
+    windowsHide: false,
+    ...options,
+  });
+  return child;
+}
+
+function run(command, args, options = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawnInherit(command, args, options);
+    child.on("error", reject);
+    child.on("exit", (code, signal) => {
+      if (code === 0) resolve();
+      else reject(new Error(`${command} ${args.join(" ")} 退出失败：${signal ?? code}`));
+    });
+  });
+}
+
+async function probe(url) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 900);
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    return response.ok;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function isRunning() {
+  return probe(healthUrl);
+}
+
+function openUrl(url) {
+  if (isWindows) {
+    spawn("cmd", ["/c", "start", "", url], {
+      detached: true,
+      stdio: "ignore",
+      windowsHide: true,
+    }).unref();
+    return;
+  }
+  const opener = process.platform === "darwin" ? "open" : "xdg-open";
+  const child = spawn(opener, [url], {
+    detached: true,
+    stdio: "ignore",
+  });
+  child.on("error", () => {
+    console.log(`请在浏览器中打开：${url}`);
+  });
+  child.unref();
+}
+
+async function openWhenReady(url, probeUrl = healthUrl) {
+  for (let index = 0; index < 80; index += 1) {
+    if (await probe(probeUrl)) {
+      openUrl(url);
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  console.error(`服务启动超时，请手动打开：${url}`);
+}
+
+function serverArgs({ reload = false } = {}) {
+  const args = [
+    "-m",
+    "uvicorn",
+    "backend.app.main:app",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "8000",
+  ];
+  if (reload) args.push("--reload", "--reload-dir", "backend");
+  return args;
+}
+
+function waitForExit(child) {
+  return new Promise((resolve, reject) => {
+    child.on("error", reject);
+    child.on("exit", (code, signal) => {
+      if (code === 0 || signal === "SIGINT" || signal === "SIGTERM") resolve();
+      else reject(new Error(`服务退出失败：${signal ?? code}`));
+    });
+  });
+}
+
+async function startProduction({ build = true, open = true } = {}) {
+  ensureProject();
+  if (await isRunning()) {
+    console.log(`Web Resume 已在运行：${prodUrl}`);
+    if (open) openUrl(prodUrl);
+    return;
+  }
+  if (build) {
+    console.log("正在构建生产版本...");
+    await run(npmCommand, ["run", "build"]);
+  }
+  console.log(`正在启动 Web Resume：${prodUrl}`);
+  if (open) void openWhenReady(prodUrl, healthUrl);
+  const child = spawnInherit(venvPythonPath(), serverArgs(), {
+    env: { ...process.env, APP_ORIGIN: prodUrl },
+  });
+  await waitForExit(child);
+}
+
+async function startDev({ open = true } = {}) {
+  ensureProject();
+  const children = [];
+  const stopChildren = () => {
+    for (const child of children) {
+      if (!child.killed) child.kill();
+    }
+  };
+  process.once("SIGINT", () => {
+    stopChildren();
+  });
+  process.once("SIGTERM", () => {
+    stopChildren();
+  });
+
+  const backend = spawnInherit(venvPythonPath(), serverArgs({ reload: true }), {
+    env: { ...process.env, APP_ORIGIN: devUrl },
+  });
+  const frontend = spawnInherit(npmCommand, ["--prefix", "frontend", "run", "dev"]);
+  children.push(backend, frontend);
+
+  if (open) void openWhenReady(devUrl, devUrl);
+
+  await Promise.race(children.map(waitForExit));
+  stopChildren();
+}
+
+function commandOutput(command, args) {
+  return new Promise((resolve) => {
+    const child = spawn(command, args, {
+      encoding: "utf8",
+      windowsHide: true,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let output = "";
+    child.stdout?.on("data", (chunk) => {
+      output += chunk.toString();
+    });
+    child.stderr?.on("data", (chunk) => {
+      output += chunk.toString();
+    });
+    child.on("error", () => resolve(""));
+    child.on("exit", () => resolve(output));
+  });
+}
+
+async function listenerPids() {
+  if (isWindows) {
+    const output = await commandOutput("netstat", ["-ano", "-p", "tcp"]);
+    return [
+      ...new Set(
+        output
+          .split(/\\r?\\n/)
+          .filter((line) => line.includes(":8000") && /LISTENING/i.test(line))
+          .map((line) => line.trim().split(/\\s+/).at(-1))
+          .filter(Boolean),
+      ),
+    ];
+  }
+  const output = await commandOutput("lsof", ["-tiTCP:8000", "-sTCP:LISTEN"]);
+  return output
+    .split(/\\s+/)
+    .map((pid) => pid.trim())
+    .filter(Boolean);
+}
+
+async function stopServer() {
+  if (!(await isRunning())) {
+    console.log("当前没有检测到 Web Resume 服务。");
+    return;
+  }
+  const pids = await listenerPids();
+  if (pids.length === 0) {
+    console.log("检测到健康接口，但没有找到 8000 端口监听进程。");
+    return;
+  }
+  if (isWindows) {
+    for (const pid of pids) await run("taskkill", ["/PID", pid, "/F"]);
+  } else {
+    for (const pid of pids) process.kill(Number(pid));
+  }
+  console.log("已停止 Web Resume 服务。");
+}
+
+async function status() {
+  if (await isRunning()) console.log(`运行中：${prodUrl}`);
+  else console.log("未运行。");
+}
+
+async function runTests() {
+  ensureProject();
+  await run(venvPythonPath(), ["-m", "pytest", "backend/tests", "-q"]);
+  await run(npmCommand, ["--prefix", "frontend", "run", "test"]);
+}
+
+async function main() {
+  const args = process.argv.slice(2);
+  const command = args[0] ?? "--help";
+  const noOpen = args.includes("--no-open");
+  const shouldOpen = args.includes("--open");
+
+  switch (command) {
+    case "--start":
+    case "start":
+      await startProduction({ build: true, open: true });
+      break;
+    case "--serve":
+    case "serve":
+      await startProduction({ build: false, open: shouldOpen });
+      break;
+    case "--dev":
+    case "dev":
+      await startDev({ open: !noOpen });
+      break;
+    case "--status":
+    case "status":
+      await status();
+      break;
+    case "--test":
+    case "test":
+      await runTests();
+      break;
+    case "--stop":
+    case "stop":
+      await stopServer();
+      break;
+    case "--help":
+    case "-h":
+    case "help":
+      usage();
+      break;
+    default:
+      console.error(`未知参数：${command}`);
+      usage();
+      process.exitCode = 2;
+  }
+}
+
+main().catch((error) => {
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exitCode = 1;
+});
