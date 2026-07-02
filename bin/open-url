@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+url="${1:-}"
+if [[ -z "$url" ]]; then
+  echo "用法：open-url <url>" >&2
+  exit 2
+fi
+
+if command -v open >/dev/null 2>&1; then
+  open "$url"
+elif command -v xdg-open >/dev/null 2>&1; then
+  xdg-open "$url" >/dev/null 2>&1 &
+elif command -v cmd.exe >/dev/null 2>&1; then
+  cmd.exe /c start "" "$url" >/dev/null 2>&1
+else
+  echo "请在浏览器中打开：$url"
+fi

@@ -2,10 +2,31 @@
 
 本地单用户简历管理器：导入 Markdown 或 DOCX，在网页中调整内容和顺序，并按参考版式导出 A4 PDF。
 
+## 给别人安装
+
+把 GitHub 仓库链接发给对方即可：
+
+<https://github.com/dimbaby/web-resume>
+
+对方可以在终端执行：
+
+```bash
+git clone https://github.com/dimbaby/web-resume.git
+cd web-resume
+python3 -m venv .venv
+./.venv/bin/pip install -r backend/requirements.txt
+npm install
+npm --prefix frontend install
+npm run prod:open
+```
+
+然后浏览器会打开 <http://127.0.0.1:8000>。
+
+当前项目主要按 macOS 本地使用设计；PDF 导出默认使用 macOS 的 Google Chrome 路径。如果对方的 Chrome 不在默认位置，可以通过 `CHROME_PATH` 指定 Chrome 可执行文件路径。
+
 ## 首次安装
 
 ```bash
-cd /Users/dimbaby/Desktop/新简历/web-resume
 python3 -m venv .venv
 ./.venv/bin/pip install -r backend/requirements.txt
 npm install
@@ -33,6 +54,21 @@ webresume --stop     # 停止服务
 ```
 
 如果还没有安装全局命令，也可以在项目目录中运行下面的 npm 命令。
+
+也可以直接在项目目录使用内置命令：
+
+```bash
+./bin/webresume --start
+```
+
+如果想把它安装成全局命令，可以在项目目录执行：
+
+```bash
+mkdir -p "$HOME/.local/bin"
+ln -sfn "$PWD/bin/webresume" "$HOME/.local/bin/webresume"
+```
+
+如果随后提示 `webresume: command not found`，需要把 `~/.local/bin` 加入 shell 的 `PATH`。
 
 开发模式：
 

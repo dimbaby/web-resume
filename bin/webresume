@@ -1,7 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PROJECT_DIR="/Users/dimbaby/Desktop/新简历/web-resume"
+SOURCE="${BASH_SOURCE[0]}"
+while [[ -L "$SOURCE" ]]; do
+  SOURCE_DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
+  TARGET="$(readlink "$SOURCE")"
+  if [[ "$TARGET" == /* ]]; then
+    SOURCE="$TARGET"
+  else
+    SOURCE="$SOURCE_DIR/$TARGET"
+  fi
+done
+SCRIPT_DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." >/dev/null 2>&1 && pwd)"
+
 PROD_URL="http://127.0.0.1:8000"
 DEV_URL="http://127.0.0.1:5173"
 HEALTH_URL="http://127.0.0.1:8000/api/health"
@@ -44,11 +56,15 @@ is_running() {
   curl -fsS --max-time 1 "$HEALTH_URL" >/dev/null 2>&1
 }
 
+open_url() {
+  "$PROJECT_DIR/bin/open-url" "$1"
+}
+
 open_when_ready() {
   local url="$1"
   for _ in $(seq 1 60); do
     if is_running; then
-      open "$url" >/dev/null 2>&1 || true
+      open_url "$url" >/dev/null 2>&1 || true
       return 0
     fi
     sleep 0.25
@@ -61,7 +77,7 @@ start_prod() {
   ensure_project
   if is_running; then
     echo "Web Resume 已在运行，正在打开网页：$PROD_URL"
-    open "$PROD_URL" >/dev/null 2>&1 || true
+    open_url "$PROD_URL" >/dev/null 2>&1 || true
     return 0
   fi
   cd "$PROJECT_DIR"
