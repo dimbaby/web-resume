@@ -417,6 +417,34 @@ textarea {
   padding: 16px;
 }
 
+.appearance-editor {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 16px;
+}
+
+.appearance-editor label {
+  color: #596a62;
+  display: grid;
+  font-size: 11px;
+  font-weight: 700;
+  gap: 5px;
+}
+
+.appearance-editor select {
+  font-size: 13px;
+  padding: 8px 9px;
+  width: 100%;
+}
+
+.style-hint {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  margin: -2px 0 2px;
+}
+
 .profile-editor .panel-title-row {
   align-items: start;
   margin-bottom: 14px;
@@ -453,11 +481,19 @@ textarea {
 }
 
 .field-grid input,
+.field-grid textarea,
 .item-editor input,
 .item-editor textarea {
   font-size: 13px;
   padding: 8px 9px;
   width: 100%;
+}
+
+.field-grid textarea,
+.item-editor textarea {
+  line-height: 1.45;
+  min-height: 42px;
+  resize: vertical;
 }
 
 .module-heading {
@@ -576,6 +612,43 @@ textarea {
 .bullet-editor textarea {
   line-height: 1.45;
   min-height: 56px;
+}
+
+.format-control-row {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.format-controls {
+  align-items: center;
+  background: #f7faf8;
+  border: 1px solid #e0e7e3;
+  border-radius: 8px;
+  color: #66766f;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 12px;
+  gap: 8px;
+  padding: 8px;
+}
+
+.format-controls > span {
+  color: var(--ink);
+  font-weight: 750;
+  margin-right: 2px;
+}
+
+.format-controls label {
+  align-items: center;
+  display: inline-flex;
+  gap: 4px;
+}
+
+.format-controls input {
+  accent-color: var(--green);
+  box-shadow: none;
+  width: auto;
 }
 
 .drag-handle {

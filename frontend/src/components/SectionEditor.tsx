@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { ChevronDown, Plus, Trash2 } from "lucide-react";
-import type { ResumeBullet, ResumeItem, ResumeSection } from "../types";
-import { plain, rich, uid } from "../utils";
+import type { ResumeBullet, ResumeItem, ResumeSection, TextStyle } from "../types";
+import { plain, rich, styleRichText, uid } from "../utils";
 import { SortableList } from "./SortableList";
 
 type Props = {
@@ -14,7 +14,15 @@ type Props = {
 };
 
 function emptyItem(): ResumeItem {
-  return { id: uid(), title: [], subtitle: [], date: "", bullets: [] };
+  return {
+    id: uid(),
+    title: [],
+    subtitle: [],
+    title_style: { bold: true, italic: false },
+    subtitle_style: { bold: false, italic: true },
+    date: "",
+    bullets: [],
+  };
 }
 
 function emptyBullet(): ResumeBullet {
@@ -70,7 +78,37 @@ export function SectionEditor({
     );
   }
 
+  function renderStyleControls(
+    label: string,
+    style: TextStyle,
+    onChange: (style: TextStyle) => void,
+  ) {
+    return (
+      <div className="format-controls" aria-label={`${label}样式`}>
+        <span>{label}</span>
+        <label>
+          <input
+            type="checkbox"
+            checked={style.bold}
+            onChange={(event) => onChange({ ...style, bold: event.target.checked })}
+          />
+          加粗
+        </label>
+        <label>
+          <input
+            type="checkbox"
+            checked={style.italic}
+            onChange={(event) => onChange({ ...style, italic: event.target.checked })}
+          />
+          斜体
+        </label>
+      </div>
+    );
+  }
+
   function renderItem(item: ResumeItem, itemHandle: ReactNode) {
+    const titleStyle = item.title_style ?? { bold: true, italic: false };
+    const subtitleStyle = item.subtitle_style ?? { bold: false, italic: true };
     return (
       <div className="item-editor">
         <div className="item-editor-heading">
@@ -88,10 +126,17 @@ export function SectionEditor({
         <div className="field-grid two-columns">
           <label>
             名称
-            <input
+            <textarea
               value={plain(item.title)}
+              rows={2}
               placeholder="如：车险纯保费建模项目"
-              onChange={(event) => updateItem({ ...item, title: rich(event.target.value) })}
+              onChange={(event) =>
+                updateItem({
+                  ...item,
+                  title_style: titleStyle,
+                  title: rich(event.target.value, titleStyle),
+                })
+              }
             />
           </label>
           <label>
@@ -105,12 +150,35 @@ export function SectionEditor({
         </div>
         <label>
           单位、角色或副标题
-          <input
+          <textarea
             value={plain(item.subtitle)}
+            rows={2}
             placeholder="如：广义线性模型课程报告"
-            onChange={(event) => updateItem({ ...item, subtitle: rich(event.target.value) })}
+            onChange={(event) =>
+              updateItem({
+                ...item,
+                subtitle_style: subtitleStyle,
+                subtitle: rich(event.target.value, subtitleStyle),
+              })
+            }
           />
         </label>
+        <div className="format-control-row">
+          {renderStyleControls("主标题", titleStyle, (style) =>
+            updateItem({
+              ...item,
+              title_style: style,
+              title: styleRichText(item.title, style),
+            }),
+          )}
+          {renderStyleControls("副标题", subtitleStyle, (style) =>
+            updateItem({
+              ...item,
+              subtitle_style: style,
+              subtitle: styleRichText(item.subtitle, style),
+            }),
+          )}
+        </div>
         <SortableList
           items={item.bullets}
           className="bullet-list-editor"

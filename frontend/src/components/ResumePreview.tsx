@@ -1,19 +1,40 @@
 import type { ReactNode } from "react";
-import type { ResumeDocument, RichTextSpan } from "../types";
+import type { ResumeDocument, RichTextSpan, TextStyle } from "../types";
 
 function RichText({ spans }: { spans: RichTextSpan[] }) {
   return spans.map((span, index) => {
     let content: ReactNode = span.text;
     if (span.bold) content = <strong>{content}</strong>;
     if (span.italic) content = <em>{content}</em>;
-    return <span key={`${index}-${span.text}`}>{content}</span>;
+    return (
+      <span className="rich-text-span" key={`${index}-${span.text}`}>
+        {content}
+      </span>
+    );
   });
+}
+
+function styleClass(style?: TextStyle, fallback?: TextStyle) {
+  const resolved = style ?? fallback ?? { bold: false, italic: false };
+  return [
+    resolved.bold ? "resume-text-bold" : "",
+    resolved.italic ? "resume-text-italic" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
 export function ResumePreview({ document }: { document: ResumeDocument }) {
   const { profile } = document;
+  const appearance = document.appearance ?? {
+    template: "reference",
+    bullet_style: "triangle",
+  };
   return (
-    <article className="resume-content" aria-label={`${document.title} 预览`}>
+    <article
+      className={`resume-content resume-template-${appearance.template} resume-bullet-${appearance.bullet_style}`}
+      aria-label={`${document.title} 预览`}
+    >
       <header className={`resume-header${profile.photo_url ? " has-photo" : ""}`}>
         <h1 className="resume-name">{profile.name || "姓名"}</h1>
         <div className="resume-contact">
@@ -37,14 +58,24 @@ export function ResumePreview({ document }: { document: ResumeDocument }) {
             <div className="resume-item" key={item.id}>
               {(item.title.length > 0 || item.date) && (
                 <div className="resume-item-header">
-                  <div className="resume-item-title">
+                  <div
+                    className={`resume-item-title ${styleClass(item.title_style, {
+                      bold: true,
+                      italic: false,
+                    })}`}
+                  >
                     <RichText spans={item.title} />
                   </div>
                   {item.date && <div className="resume-item-date">{item.date}</div>}
                 </div>
               )}
               {item.subtitle.length > 0 && (
-                <div className="resume-item-subtitle">
+                <div
+                  className={`resume-item-subtitle ${styleClass(item.subtitle_style, {
+                    bold: false,
+                    italic: true,
+                  })}`}
+                >
                   <RichText spans={item.subtitle} />
                 </div>
               )}

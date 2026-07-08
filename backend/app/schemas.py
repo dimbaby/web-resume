@@ -15,6 +15,11 @@ class RichTextSpan(BaseModel):
 RichText = list[RichTextSpan]
 
 
+class TextStyle(BaseModel):
+    bold: bool = False
+    italic: bool = False
+
+
 class ResumeBullet(BaseModel):
     id: str
     content: RichText = Field(default_factory=list)
@@ -24,6 +29,12 @@ class ResumeItem(BaseModel):
     id: str
     title: RichText = Field(default_factory=list)
     subtitle: RichText = Field(default_factory=list)
+    title_style: TextStyle = Field(
+        default_factory=lambda: TextStyle(bold=True, italic=False)
+    )
+    subtitle_style: TextStyle = Field(
+        default_factory=lambda: TextStyle(bold=False, italic=True)
+    )
     date: str = ""
     bullets: list[ResumeBullet] = Field(default_factory=list)
 
@@ -59,10 +70,20 @@ class SourceInfo(BaseModel):
     format: Literal["md", "docx", "manual"] = "manual"
 
 
+TemplateStyle = Literal["reference", "ats", "modern", "compact", "elegant"]
+BulletStyle = Literal["triangle", "dot", "dash", "square", "none"]
+
+
+class ResumeAppearance(BaseModel):
+    template: TemplateStyle = "reference"
+    bullet_style: BulletStyle = "triangle"
+
+
 class ResumeDocument(BaseModel):
     id: str
     title: str
     profile: ResumeProfile = Field(default_factory=ResumeProfile)
+    appearance: ResumeAppearance = Field(default_factory=ResumeAppearance)
     sections: list[ResumeSection] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     source: SourceInfo = Field(default_factory=SourceInfo)

@@ -15,10 +15,57 @@ import { NameDialog } from "../components/NameDialog";
 import { PagedPreview } from "../components/PagedPreview";
 import { SectionEditor } from "../components/SectionEditor";
 import { SortableList } from "../components/SortableList";
-import type { ResumeDocument, ResumeSection } from "../types";
+import type {
+  BulletStyle,
+  ResumeAppearance,
+  ResumeDocument,
+  ResumeSection,
+  TemplateStyle,
+} from "../types";
 import { uid } from "../utils";
 
 type SaveState = "saved" | "saving" | "error";
+
+const DEFAULT_APPEARANCE: ResumeAppearance = {
+  template: "reference",
+  bullet_style: "triangle",
+};
+
+const TEMPLATE_OPTIONS: { value: TemplateStyle; label: string; hint: string }[] = [
+  {
+    value: "reference",
+    label: "参考版",
+    hint: "接近当前示例用户简历版式，中文友好，右上照片。",
+  },
+  {
+    value: "ats",
+    label: "ATS 极简",
+    hint: "标准单栏、少装饰，适合网申系统读取。",
+  },
+  {
+    value: "modern",
+    label: "现代清爽",
+    hint: "更轻的分隔线和强调色，适合产品、数据、互联网岗位。",
+  },
+  {
+    value: "compact",
+    label: "紧凑单页",
+    hint: "字号和间距更紧，适合内容较多时压缩页数。",
+  },
+  {
+    value: "elegant",
+    label: "典雅学术",
+    hint: "更接近英文 CV/学术简历质感，适合科研或申请场景。",
+  },
+];
+
+const BULLET_OPTIONS: { value: BulletStyle; label: string }[] = [
+  { value: "triangle", label: "三角 ➢" },
+  { value: "dot", label: "圆点 •" },
+  { value: "dash", label: "短横 -" },
+  { value: "square", label: "方块 ▪" },
+  { value: "none", label: "无符号" },
+];
 
 export function EditorPage() {
   const { id = "" } = useParams();
@@ -59,7 +106,13 @@ export function EditorPage() {
         .catch(() => setSaveState("error"));
     }, 750);
     return () => window.clearTimeout(timer);
-  }, [document?.title, document?.profile, document?.sections, document?.warnings]);
+  }, [
+    document?.title,
+    document?.profile,
+    document?.appearance,
+    document?.sections,
+    document?.warnings,
+  ]);
 
   if (error) {
     return (
@@ -73,6 +126,14 @@ export function EditorPage() {
   }
   if (!document) return <main className="center-state">正在打开简历…</main>;
   const currentDocument = document;
+  const appearance = document.appearance ?? DEFAULT_APPEARANCE;
+
+  function updateAppearance(next: Partial<ResumeAppearance>) {
+    setDocument({
+      ...currentDocument,
+      appearance: { ...appearance, ...next },
+    });
+  }
 
   function updateSection(section: ResumeSection) {
     setDocument((current) =>
@@ -325,6 +386,48 @@ export function EditorPage() {
                 />
               </label>
             </div>
+          </section>
+
+          <section className="appearance-editor panel-card">
+            <div className="panel-title-row">
+              <div>
+                <span className="eyebrow">STYLE</span>
+                <h2>模板与符号</h2>
+              </div>
+            </div>
+            <label>
+              模板样式
+              <select
+                value={appearance.template}
+                onChange={(event) =>
+                  updateAppearance({ template: event.target.value as TemplateStyle })
+                }
+              >
+                {TEMPLATE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p className="style-hint">
+              {TEMPLATE_OPTIONS.find((option) => option.value === appearance.template)?.hint}
+            </p>
+            <label>
+              要点符号
+              <select
+                value={appearance.bullet_style}
+                onChange={(event) =>
+                  updateAppearance({ bullet_style: event.target.value as BulletStyle })
+                }
+              >
+                {BULLET_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
           </section>
 
           <div className="panel-title-row module-heading">

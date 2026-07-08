@@ -12,6 +12,10 @@ const document: ResumeDocument = {
     phone: "13800000000",
     photo_url: "",
   },
+  appearance: {
+    template: "reference",
+    bullet_style: "triangle",
+  },
   sections: [
     {
       id: "section-1",
@@ -22,6 +26,8 @@ const document: ResumeDocument = {
           id: "item-1",
           title: [{ text: "示例大学", bold: true }],
           subtitle: [],
+          title_style: { bold: true, italic: false },
+          subtitle_style: { bold: false, italic: true },
           date: "2022.09 - 2026.06",
           bullets: [{ id: "bullet-1", content: [{ text: "专业：统计学" }] }],
         },
@@ -56,5 +62,17 @@ describe("ResumePreview", () => {
     );
     expect(container.querySelector(".resume-header")).toHaveClass("has-photo");
     expect(container.querySelector('img[alt="证件照"]')).not.toHaveAttribute("style");
+  });
+
+  it("can render a resume without bullet symbols", () => {
+    const { container } = render(
+      <ResumePreview
+        document={{
+          ...document,
+          appearance: { ...document.appearance, bullet_style: "none" },
+        }}
+      />,
+    );
+    expect(container.querySelector(".resume-content")).toHaveClass("resume-bullet-none");
   });
 });

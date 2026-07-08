@@ -12,6 +12,8 @@ const section: ResumeSection = {
       id: "school",
       title: [{ text: "示例大学" }],
       subtitle: [],
+      title_style: { bold: true, italic: false },
+      subtitle_style: { bold: false, italic: true },
       date: "2022 - 2026",
       bullets: [],
     },
