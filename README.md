@@ -149,6 +149,15 @@ npm run update
 
 如果项目源码有本地修改，更新可能会停止并提示先处理本地修改；这是为了避免覆盖用户自己的改动。
 
+如果旧版全局命令提示 `未知参数：--update`，说明当前终端执行到的是旧脚本。先进入项目目录执行：
+
+```bash
+git pull --ff-only
+npm run update
+```
+
+更新完成后，如果 `webresume --help` 仍然看不到 `--update`，需要重新确认全局命令指向当前项目的 `bin/webresume`。
+
 ## 测试
 
 ```bash
