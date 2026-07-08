@@ -19,6 +19,7 @@ function usage() {
   webresume --start      生产模式：构建、启动服务，并自动打开网页
   webresume --dev        开发模式：启动前后端热更新服务，并自动打开网页
   webresume --serve      仅启动生产服务，不重新构建
+  webresume --update     更新代码和依赖，不覆盖本地修改
   webresume --test       运行后端和前端测试
   webresume --status     查看当前服务状态
   webresume --stop       停止当前本地服务
@@ -56,6 +57,13 @@ function ensureProject() {
   ) {
     throw new Error("缺少前端依赖，请先执行 npm install 和 npm --prefix frontend install。");
   }
+}
+
+async function ensureVenv() {
+  if (existsSync(venvPythonPath())) return;
+  console.log("未检测到 Python 虚拟环境，正在创建 .venv...");
+  if (isWindows) await run("py", ["-3", "-m", "venv", ".venv"]);
+  else await run("python3", ["-m", "venv", ".venv"]);
 }
 
 function spawnInherit(command, args, options = {}) {
@@ -266,6 +274,24 @@ async function runTests() {
   await run(npmCommand, ["--prefix", "frontend", "run", "test"]);
 }
 
+async function updateApp() {
+  if (!existsSync(projectDir)) throw new Error(`项目目录不存在：${projectDir}`);
+  if (await isRunning()) {
+    console.log("检测到 Web Resume 正在运行。建议更新完成后重新启动服务。");
+  }
+  console.log("正在拉取最新代码...");
+  await run("git", ["pull", "--ff-only"]);
+  await ensureVenv();
+  console.log("正在更新后端依赖...");
+  await run(venvPythonPath(), ["-m", "pip", "install", "-r", "backend/requirements.txt"]);
+  console.log("正在更新前端依赖...");
+  await run(npmCommand, ["install"]);
+  await run(npmCommand, ["--prefix", "frontend", "install"]);
+  console.log("正在构建生产版本...");
+  await run(npmCommand, ["run", "build"]);
+  console.log("更新完成。运行 webresume --start 或 npm run prod:open 即可启动。");
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const command = args[0] ?? "--help";
@@ -292,6 +318,10 @@ async function main() {
     case "--test":
     case "test":
       await runTests();
+      break;
+    case "--update":
+    case "update":
+      await updateApp();
       break;
     case "--stop":
     case "stop":

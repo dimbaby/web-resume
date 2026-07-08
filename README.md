@@ -125,6 +125,30 @@ webresume --test
 
 Windows 用户通常直接在项目目录使用 `npm run prod:open` 或 `.\bin\webresume.cmd --start` 即可。
 
+## 更新
+
+已安装过的项目不需要重新安装。进入项目目录后执行：
+
+```bash
+npm run update
+```
+
+如果已经配置了全局 `webresume` 命令，也可以在任意目录执行：
+
+```bash
+webresume --update
+```
+
+Windows PowerShell 也可以直接在项目目录执行：
+
+```powershell
+npm run update
+```
+
+更新命令会拉取最新代码、刷新前后端依赖，并重新构建生产版本。运行数据保存在 `data/`，更新不会删除已有简历版本。
+
+如果项目源码有本地修改，更新可能会停止并提示先处理本地修改；这是为了避免覆盖用户自己的改动。
+
 ## 测试
 
 ```bash

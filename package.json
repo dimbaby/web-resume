@@ -9,6 +9,7 @@
     "start": "node ./bin/webresume.mjs --serve",
     "start:open": "node ./bin/webresume.mjs --serve --open",
     "prod:open": "node ./bin/webresume.mjs --start",
+    "update": "node ./bin/webresume.mjs --update",
     "test": "node ./bin/webresume.mjs --test"
   },
   "devDependencies": {
