@@ -35,6 +35,39 @@ async def export_pdf(resume_id: str, title: str) -> tuple[Path, str]:
             await page.wait_for_function(
                 "window.__RESUME_READY__ === true", timeout=30_000
             )
+            await page.evaluate(
+                """
+                async () => {
+                  const images = Array.from(document.images);
+                  await Promise.all(images.map((image) => {
+                    if (image.complete) return Promise.resolve();
+                    return new Promise((resolve) => {
+                      image.addEventListener("load", resolve, { once: true });
+                      image.addEventListener("error", resolve, { once: true });
+                    });
+                  }));
+                  await Promise.all(images.map((image) => {
+                    if (image.naturalWidth > 0 && image.decode) {
+                      return image.decode().catch(() => undefined);
+                    }
+                    return Promise.resolve();
+                  }));
+                  await new Promise((resolve) => requestAnimationFrame(() => {
+                    requestAnimationFrame(resolve);
+                  }));
+                }
+                """
+            )
+            broken_images = await page.evaluate(
+                """
+                () => Array.from(document.images)
+                  .filter((image) => !image.complete || image.naturalWidth === 0)
+                  .map((image) => image.currentSrc || image.src || image.getAttribute("src"))
+                """
+            )
+            if broken_images:
+                joined = "、".join(str(value) for value in broken_images)
+                raise RuntimeError(f"图片未加载完成，已停止导出：{joined}")
             await page.emulate_media(media="print")
             await page.pdf(
                 path=str(output_path),

@@ -9,6 +9,37 @@ type Props = {
   onReady?: () => void;
 };
 
+async function waitForImages(container: HTMLElement) {
+  const images = Array.from(container.querySelectorAll("img"));
+  await Promise.all(
+    images.map(
+      (image) =>
+        new Promise<void>((resolve) => {
+          if (image.complete && image.naturalWidth > 0) {
+            resolve();
+            return;
+          }
+          const done = () => {
+            image.removeEventListener("load", done);
+            image.removeEventListener("error", done);
+            resolve();
+          };
+          image.addEventListener("load", done, { once: true });
+          image.addEventListener("error", done, { once: true });
+        }).then(async () => {
+          if ("decode" in image && image.naturalWidth > 0) {
+            await image.decode().catch(() => undefined);
+          }
+        }),
+    ),
+  );
+  await new Promise<void>((resolve) => {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => resolve());
+    });
+  });
+}
+
 export function PagedPreview({ document, onPageCount, onReady }: Props) {
   const sourceRef = useRef<HTMLDivElement>(null);
   const targetRef = useRef<HTMLDivElement>(null);
@@ -39,6 +70,8 @@ export function PagedPreview({ document, onPageCount, onReady }: Props) {
         );
         if (run !== runRef.current) return;
         targetRef.current.replaceChildren(...stagedTarget.childNodes);
+        await waitForImages(targetRef.current);
+        if (run !== runRef.current) return;
         onPageCount?.(flow.total);
         onReady?.();
       } finally {
