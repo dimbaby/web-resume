@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from urllib.parse import quote
+from uuid import uuid4
 
 from playwright.async_api import async_playwright
 
@@ -10,7 +11,7 @@ from .settings import APP_ORIGIN, CHROME_PATH, EXPORT_DIR, ensure_directories
 
 async def export_pdf(resume_id: str, title: str) -> tuple[Path, str]:
     ensure_directories()
-    output_path = EXPORT_DIR / f"{resume_id}.pdf"
+    output_path = EXPORT_DIR / f"{resume_id}-{uuid4().hex}.pdf"
     if not CHROME_PATH:
         raise RuntimeError("未找到 Google Chrome。请设置 CHROME_PATH 指向可执行文件。")
     chrome = Path(CHROME_PATH)

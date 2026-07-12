@@ -21,23 +21,79 @@ from .schemas import (
 )
 
 
+ENGLISH_MONTH = (
+    r"(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|"
+    r"Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|"
+    r"Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?"
+)
+DATE_POINT = (
+    rf"(?:(?:19|20)\d{{2}}[./-]\d{{1,2}}|"
+    rf"\d{{1,2}}/(?:19|20)\d{{2}}|"
+    rf"{ENGLISH_MONTH}\s+(?:19|20)\d{{2}}|"
+    rf"(?:Spring|Summer|Fall|Autumn|Winter)\s+(?:19|20)\d{{2}}|"
+    rf"(?:19|20)\d{{2}})"
+)
+DATE_END = rf"(?:{DATE_POINT}|现在|至今|今|Present|Current|Now)"
 DATE_PATTERN = re.compile(
-    r"(?P<date>(?:19|20)\d{2}[./-]\d{1,2}(?:\s*[-–—至]\s*(?:(?:19|20)\d{2}[./-]\d{1,2}|现在|至今))?|(?:19|20)\d{2}(?:\s*[-–—至]\s*(?:现在|至今|(?:19|20)\d{2}))?)\s*$"
+    rf"(?P<date>{DATE_POINT}(?:\s*(?:[-–—至]|to)\s*{DATE_END})?)\s*$",
+    re.IGNORECASE,
 )
 EMAIL_PATTERN = re.compile(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}")
 PHONE_PATTERN = re.compile(r"(?<!\d)(?:\+?86[- ]?)?1\d{10}(?!\d)")
 
 SECTION_RULES: list[tuple[re.Pattern[str], SectionKind]] = [
-    (re.compile(r"教育|学历"), "education"),
-    (re.compile(r"项目|科研"), "project"),
-    (re.compile(r"实习|工作|职业"), "experience"),
-    (re.compile(r"技能|能力|证书|其他"), "skills"),
-    (re.compile(r"获奖|荣誉|奖项"), "awards"),
-    (re.compile(r"校园|社团|志愿|学生工作"), "campus"),
+    (
+        re.compile(
+            r"教育|学历|education(?:al)?(?:background)?|academicbackground",
+            re.IGNORECASE,
+        ),
+        "education",
+    ),
+    (
+        re.compile(
+            r"项目|科研|projects?|projectexperience|research(?:experience)?",
+            re.IGNORECASE,
+        ),
+        "project",
+    ),
+    (
+        re.compile(
+            r"实习|工作|职业|internships?|experience|workexperience|professionalexperience|employment(?:history)?|careerhistory",
+            re.IGNORECASE,
+        ),
+        "experience",
+    ),
+    (
+        re.compile(
+            r"技能|能力|证书|其他|skills?|technicalskills?|certifications?|qualifications?",
+            re.IGNORECASE,
+        ),
+        "skills",
+    ),
+    (
+        re.compile(
+            r"获奖|荣誉|奖项|awards?|honou?rs?(?:andawards?)?",
+            re.IGNORECASE,
+        ),
+        "awards",
+    ),
+    (
+        re.compile(
+            r"校园|社团|志愿|学生工作|campus|leadership(?:andactivities)?|activities|extracurricular|volunteer",
+            re.IGNORECASE,
+        ),
+        "campus",
+    ),
 ]
 
 CANONICAL_SECTION_PATTERN = re.compile(
-    r"^(教育经历|学历背景|项目经历|科研经历|实习经历|工作经历|职业经历|其他能力|专业技能|技能证书|获奖经历|荣誉奖项|校园经历|社团经历|志愿经历)$"
+    r"^(教育经历|学历背景|项目经历|科研经历|实习经历|工作经历|职业经历|其他能力|专业技能|技能证书|"
+    r"获奖经历|荣誉奖项|校园经历|社团经历|志愿经历|Education(?:al)?Background|Education|AcademicBackground|"
+    r"Projects?|ProjectExperience|Research(?:Experience)?|Internships?|Experience|WorkExperience|"
+    r"ProfessionalExperience|Employment(?:History)?|CareerHistory|Skills?|TechnicalSkills?|Certifications?|"
+    r"Qualifications?|Awards?|Honou?rs?(?:(?:and)?Awards?)?|CampusActivities|Leadership(?:(?:and)?Activities)?|"
+    r"Activities|ExtracurricularActivities|VolunteerExperience)$",
+    re.IGNORECASE,
 )
 
 MD = MarkdownIt("commonmark", {"html": False})
@@ -55,8 +111,82 @@ def plain(spans: Iterable[RichTextSpan]) -> str:
     return "".join(span.text for span in spans)
 
 
+_PROTECTED_UNDERSCORE = "\ue000"
+_PROTECTED_ASTERISK = "\ue001"
+PYTHON_DUNDER_NAMES = {
+    "all",
+    "annotations",
+    "call",
+    "class",
+    "contains",
+    "dict",
+    "doc",
+    "enter",
+    "eq",
+    "exit",
+    "file",
+    "getitem",
+    "hash",
+    "init",
+    "iter",
+    "len",
+    "lt",
+    "main",
+    "module",
+    "name",
+    "new",
+    "next",
+    "repr",
+    "setitem",
+    "slots",
+    "str",
+}
+
+
+def _protect_technical_markers(value: str) -> str:
+    """保护技术标识中的 Markdown 字符，避免把标识误当成强调语法。"""
+    protected = list(value)
+
+    # Python dunder 名称在 CommonMark 中会被解释为粗体。
+    for match in re.finditer(
+        r"(?<![A-Za-z0-9_])__(?P<name>[A-Za-z][A-Za-z0-9_]*)__(?![A-Za-z0-9_])",
+        value,
+    ):
+        name = match.group("name")
+        if name not in PYTHON_DUNDER_NAMES and "_" not in name:
+            continue
+        for index in range(match.start(), match.end()):
+            if protected[index] == "_":
+                protected[index] = _PROTECTED_UNDERSCORE
+
+    # 标识符内部的星号和下划线是内容，例如 model_v2_test、a*b*c。
+    for index, character in enumerate(value):
+        if character not in {"_", "*"} or protected[index] != character:
+            continue
+        if index == 0 or index + 1 >= len(value):
+            continue
+        previous_is_identifier = (
+            value[index - 1].isascii() and value[index - 1].isalnum()
+        )
+        next_is_identifier = (
+            value[index + 1].isascii() and value[index + 1].isalnum()
+        )
+        if previous_is_identifier and next_is_identifier:
+            protected[index] = (
+                _PROTECTED_UNDERSCORE if character == "_" else _PROTECTED_ASTERISK
+            )
+    return "".join(protected)
+
+
+def _restore_technical_markers(value: str) -> str:
+    return value.replace(_PROTECTED_UNDERSCORE, "_").replace(
+        _PROTECTED_ASTERISK, "*"
+    )
+
+
 def parse_inline_markdown(value: str) -> list[RichTextSpan]:
-    parsed = MD.parseInline(value)
+    protected_value = _protect_technical_markers(value)
+    parsed = MD.parseInline(protected_value)
     children = parsed[0].children if parsed and parsed[0].children else []
     spans: list[RichTextSpan] = []
     bold = False
@@ -72,14 +202,23 @@ def parse_inline_markdown(value: str) -> list[RichTextSpan]:
             italic = False
         elif token.type in {"text", "code_inline", "html_inline"} and token.content:
             spans.append(
-                RichTextSpan(text=token.content, bold=bold, italic=italic)
+                RichTextSpan(
+                    text=token.content,
+                    bold=bold,
+                    italic=italic,
+                )
             )
         elif token.type == "softbreak":
             spans.append(RichTextSpan(text=" ", bold=bold, italic=italic))
     merged = _merge_spans(spans)
     if any(marker in plain(merged) for marker in ("**", "__", "*", "_")):
-        return _parse_resume_emphasis(value)
-    return merged or rich(re.sub(r"[*_`]", "", value))
+        parsed_fallback = _parse_resume_emphasis(protected_value)
+        for span in parsed_fallback:
+            span.text = _restore_technical_markers(span.text)
+        return parsed_fallback
+    for span in merged:
+        span.text = _restore_technical_markers(span.text)
+    return merged or rich(_restore_technical_markers(protected_value))
 
 
 def _parse_resume_emphasis(value: str) -> list[RichTextSpan]:
@@ -118,9 +257,12 @@ def _parse_resume_emphasis(value: str) -> list[RichTextSpan]:
             italic = not italic
             index += 1
             continue
-        if value[index] == "`" and "`" in value[index + 1 :]:
-            index += 1
-            continue
+        if value[index] == "`":
+            closing_index = value.find("`", index + 1)
+            if closing_index >= 0:
+                buffer.extend(value[index + 1 : closing_index])
+                index = closing_index + 1
+                continue
         buffer.append(value[index])
         index += 1
     flush()
@@ -147,14 +289,54 @@ def section_kind(title: str) -> SectionKind:
     return "custom"
 
 
+def _slice_spans(
+    spans: list[RichTextSpan], start: int, end: int
+) -> list[RichTextSpan]:
+    sliced: list[RichTextSpan] = []
+    cursor = 0
+    for span in spans:
+        span_end = cursor + len(span.text)
+        overlap_start = max(start, cursor)
+        overlap_end = min(end, span_end)
+        if overlap_start < overlap_end:
+            sliced.append(
+                RichTextSpan(
+                    text=span.text[overlap_start - cursor : overlap_end - cursor],
+                    bold=span.bold,
+                    italic=span.italic,
+                )
+            )
+        cursor = span_end
+        if cursor >= end:
+            break
+    return _merge_spans(sliced)
+
+
+def _trim_spans(
+    spans: list[RichTextSpan], *, extra_characters: str = ""
+) -> list[RichTextSpan]:
+    value = plain(spans)
+
+    def removable(character: str) -> bool:
+        return character.isspace() or character in extra_characters
+
+    start = 0
+    while start < len(value) and removable(value[start]):
+        start += 1
+    end = len(value)
+    while end > start and removable(value[end - 1]):
+        end -= 1
+    return _slice_spans(spans, start, end)
+
+
 def split_title_date(spans: list[RichTextSpan]) -> tuple[list[RichTextSpan], str]:
-    value = plain(spans).replace("\t", " ").strip()
+    value = plain(spans).replace("\t", " ")
     match = DATE_PATTERN.search(value)
     if not match:
         return spans, ""
     date = match.group("date").strip()
-    title = value[: match.start()].strip()
-    return rich(title, bold=True), date
+    title = _trim_spans(_slice_spans(spans, 0, match.start()))
+    return title, date
 
 
 @dataclass
@@ -188,17 +370,102 @@ class ParsedParagraph:
         return bool(nonempty) and all(span.italic for span in nonempty)
 
 
-def _contact_from_text(profile: ResumeProfile, text: str) -> bool:
-    matched = False
-    email = EMAIL_PATTERN.search(text)
-    phone = PHONE_PATTERN.search(text)
-    if email:
-        profile.email = email.group(0)
-        matched = True
-    if phone:
-        profile.phone = phone.group(0).replace(" ", "").replace("-", "")
-        matched = True
-    return matched
+CONTACT_LABEL_PATTERN = re.compile(
+    r"(?:电子邮箱|邮箱|e-?mail|电话|手机|phone|mobile|tel)\s*[:：]?\s*$",
+    re.IGNORECASE,
+)
+CONTACT_SEPARATOR_CHARACTERS = "|｜·•,，;；/、-—–:："
+
+
+def _remove_span_ranges(
+    spans: list[RichTextSpan], ranges: list[tuple[int, int]]
+) -> list[RichTextSpan]:
+    if not ranges:
+        return [span.model_copy() for span in spans]
+    value_length = len(plain(spans))
+    kept: list[RichTextSpan] = []
+    cursor = 0
+    for start, end in sorted(ranges):
+        if cursor < start:
+            kept.extend(_slice_spans(spans, cursor, start))
+        cursor = max(cursor, end)
+    if cursor < value_length:
+        kept.extend(_slice_spans(spans, cursor, value_length))
+    return _merge_spans(kept)
+
+
+def _consume_contacts(
+    profile: ResumeProfile, spans: list[RichTextSpan]
+) -> tuple[bool, list[RichTextSpan]]:
+    text = plain(spans)
+    matches: list[re.Match[str]] = []
+    for email in EMAIL_PATTERN.finditer(text):
+        if not profile.email:
+            profile.email = email.group(0)
+            matches.append(email)
+        elif email.group(0).casefold() == profile.email.casefold():
+            matches.append(email)
+    for phone in PHONE_PATTERN.finditer(text):
+        normalized_phone = phone.group(0).replace(" ", "").replace("-", "")
+        if not profile.phone:
+            profile.phone = normalized_phone
+            matches.append(phone)
+        elif normalized_phone == profile.phone:
+            matches.append(phone)
+    if not matches:
+        return False, spans
+
+    ranges: list[tuple[int, int]] = []
+    for match in sorted(matches, key=lambda item: item.start()):
+        start = match.start()
+        label = CONTACT_LABEL_PATTERN.search(text[:start])
+        if label:
+            start = label.start()
+        ranges.append((start, match.end()))
+
+    remainder = _remove_span_ranges(spans, ranges)
+    remainder = _trim_spans(
+        remainder, extra_characters=CONTACT_SEPARATOR_CHARACTERS
+    )
+    return True, remainder
+
+
+def _name_from_remainder(value: str) -> str | None:
+    candidate = re.sub(r"^(?:姓名|name)\s*[:：]\s*", "", value.strip(), flags=re.I)
+    if re.fullmatch(r"[\u3400-\u9fff·]{2,8}", candidate):
+        return candidate
+    if re.fullmatch(
+        r"[A-Za-z][A-Za-z.'-]*(?:\s+[A-Za-z][A-Za-z.'-]*){1,3}",
+        candidate,
+    ):
+        return candidate
+    return None
+
+
+def _preserve_profile_remainder(
+    result: ParsedResume,
+    remainder: list[RichTextSpan],
+    unresolved: list[list[RichTextSpan]],
+) -> None:
+    if not remainder:
+        return
+    remaining = remainder
+    if not result.profile.name:
+        value = plain(remainder)
+        for segment in re.finditer(r"[^|｜·•,，;；/、]+", value):
+            candidate = _name_from_remainder(segment.group(0))
+            if not candidate:
+                continue
+            result.profile.name = candidate
+            remaining = _remove_span_ranges(
+                remainder, [(segment.start(), segment.end())]
+            )
+            remaining = _trim_spans(
+                remaining, extra_characters=CONTACT_SEPARATOR_CHARACTERS
+            )
+            break
+    if remaining:
+        unresolved.append(remaining)
 
 
 def _add_unresolved(result: ParsedResume, values: list[list[RichTextSpan]]) -> None:
@@ -238,9 +505,16 @@ def parse_markdown(data: bytes) -> ParsedResume:
 
         heading = re.match(r"^(#{1,6})\s+(.+)$", line)
         if heading:
-            title = plain(parse_inline_markdown(heading.group(2))).strip()
+            heading_spans = parse_inline_markdown(heading.group(2))
+            title = plain(heading_spans).strip()
             if current_section is None and len(heading.group(1)) == 1 and not result.profile.name:
-                result.profile.name = title
+                matched_contact, remainder = _consume_contacts(
+                    result.profile, heading_spans
+                )
+                if matched_contact:
+                    _preserve_profile_remainder(result, remainder, unresolved)
+                else:
+                    result.profile.name = title
                 continue
             current_section = ResumeSection(
                 id=new_id(), kind=section_kind(title), title=title, items=[]
@@ -249,13 +523,16 @@ def parse_markdown(data: bytes) -> ParsedResume:
             current_item = None
             continue
 
-        is_bullet = bool(re.match(r"^[-+*]\s+", line))
-        value = re.sub(r"^[-+*]\s+", "", line) if is_bullet else line
+        list_prefix = re.match(r"^(?:[-+*]|\d+[.)])\s+", line)
+        is_bullet = bool(list_prefix)
+        value = line[list_prefix.end() :] if list_prefix else line
         spans = parse_inline_markdown(value)
         text_value = plain(spans).strip()
 
         if current_section is None:
-            if _contact_from_text(result.profile, text_value):
+            matched_contact, remainder = _consume_contacts(result.profile, spans)
+            if matched_contact:
+                _preserve_profile_remainder(result, remainder, unresolved)
                 continue
             if not result.profile.name and len(text_value) <= 20:
                 result.profile.name = text_value
@@ -300,46 +577,130 @@ PKG_REL_NS = "http://schemas.openxmlformats.org/package/2006/relationships"
 NS = {"w": W_NS, "r": R_NS}
 
 
-def _docx_paragraphs(document_xml: bytes) -> list[ParsedParagraph]:
-    root = etree.fromstring(document_xml)
-    paragraphs: list[ParsedParagraph] = []
-    for paragraph in root.xpath(".//w:body/w:p", namespaces=NS):
-        ppr = paragraph.find(f"{{{W_NS}}}pPr")
-        style = ""
-        is_list = False
-        if ppr is not None:
-            style_node = ppr.find(f"{{{W_NS}}}pStyle")
-            if style_node is not None:
-                style = style_node.get(f"{{{W_NS}}}val", "")
-            is_list = ppr.find(f"{{{W_NS}}}numPr") is not None
+def _word_property_enabled(properties: etree._Element | None, name: str) -> bool:
+    if properties is None:
+        return False
+    node = properties.find(f"{{{W_NS}}}{name}")
+    if node is None:
+        return False
+    value = node.get(f"{{{W_NS}}}val", "1").lower()
+    return value not in {"0", "false", "off", "none"}
 
-        spans: list[RichTextSpan] = []
-        has_tab = False
-        for run in paragraph.xpath("./w:r | ./w:hyperlink/w:r", namespaces=NS):
-            rpr = run.find(f"{{{W_NS}}}rPr")
-            bold = rpr is not None and rpr.find(f"{{{W_NS}}}b") is not None
-            italic = rpr is not None and rpr.find(f"{{{W_NS}}}i") is not None
-            pieces: list[str] = []
-            for child in run:
-                if child.tag == f"{{{W_NS}}}t":
-                    pieces.append(child.text or "")
-                elif child.tag == f"{{{W_NS}}}tab":
-                    pieces.append("\t")
-                    has_tab = True
-                elif child.tag == f"{{{W_NS}}}br":
-                    pieces.append(" ")
-            if pieces:
-                spans.append(
-                    RichTextSpan(text="".join(pieces), bold=bold, italic=italic)
-                )
-        spans = _merge_spans(spans)
-        if plain(spans).strip():
-            paragraphs.append(
-                ParsedParagraph(
-                    spans=spans, is_list=is_list, style=style, has_tab=has_tab
-                )
+
+def _parse_docx_paragraph_node(
+    paragraph: etree._Element, *, include_textbox_runs: bool = False
+) -> ParsedParagraph | None:
+    ppr = paragraph.find(f"{{{W_NS}}}pPr")
+    style = ""
+    is_list = False
+    if ppr is not None:
+        style_node = ppr.find(f"{{{W_NS}}}pStyle")
+        if style_node is not None:
+            style = style_node.get(f"{{{W_NS}}}val", "")
+        is_list = ppr.find(f"{{{W_NS}}}numPr") is not None
+
+    run_xpath = ".//w:r[not(ancestor::w:del)]"
+    if not include_textbox_runs:
+        run_xpath = ".//w:r[not(ancestor::w:del) and not(ancestor::w:txbxContent)]"
+
+    spans: list[RichTextSpan] = []
+    has_tab = False
+    for run in paragraph.xpath(run_xpath, namespaces=NS):
+        rpr = run.find(f"{{{W_NS}}}rPr")
+        bold = _word_property_enabled(rpr, "b")
+        italic = _word_property_enabled(rpr, "i")
+        pieces: list[str] = []
+        for child in run:
+            if child.tag == f"{{{W_NS}}}t":
+                pieces.append(child.text or "")
+            elif child.tag == f"{{{W_NS}}}tab":
+                pieces.append("\t")
+                has_tab = True
+            elif child.tag in {f"{{{W_NS}}}br", f"{{{W_NS}}}cr"}:
+                pieces.append(" ")
+            elif child.tag == f"{{{W_NS}}}noBreakHyphen":
+                pieces.append("-")
+        if pieces:
+            spans.append(
+                RichTextSpan(text="".join(pieces), bold=bold, italic=italic)
             )
-    return paragraphs
+
+    spans = _merge_spans(spans)
+    if not plain(spans).strip():
+        return None
+    return ParsedParagraph(
+        spans=spans, is_list=is_list, style=style, has_tab=has_tab
+    )
+
+
+def _iter_docx_body_paragraphs(container: etree._Element) -> Iterable[etree._Element]:
+    """按 Word 正文块顺序遍历段落，包括表格和块级内容控件。"""
+    recursive_containers = {
+        "body",
+        "tbl",
+        "tr",
+        "tc",
+        "sdt",
+        "sdtContent",
+        "customXml",
+        "ins",
+        "moveTo",
+    }
+    for child in container:
+        local_name = etree.QName(child).localname
+        if local_name == "p":
+            yield child
+        elif local_name in recursive_containers:
+            yield from _iter_docx_body_paragraphs(child)
+
+
+def _docx_paragraphs(
+    document_xml: bytes,
+) -> tuple[list[ParsedParagraph], list[list[RichTextSpan]], bool]:
+    root = etree.fromstring(document_xml)
+    body = root.find(f"{{{W_NS}}}body")
+    content_root = body if body is not None else root
+    paragraphs: list[ParsedParagraph] = []
+    for paragraph_node in _iter_docx_body_paragraphs(content_root):
+        paragraph = _parse_docx_paragraph_node(paragraph_node)
+        if paragraph is not None:
+            paragraphs.append(paragraph)
+
+    textbox_values: list[list[RichTextSpan]] = []
+    textbox_contents = root.xpath(".//w:txbxContent", namespaces=NS)
+    for textbox_content in textbox_contents:
+        for paragraph_node in textbox_content.xpath(".//w:p", namespaces=NS):
+            paragraph = _parse_docx_paragraph_node(
+                paragraph_node, include_textbox_runs=True
+            )
+            if paragraph is not None:
+                textbox_values.append(paragraph.spans)
+
+    has_textbox = bool(
+        textbox_contents
+        or root.xpath(
+            ".//*[local-name()='textbox' or local-name()='txbx']"
+        )
+    )
+    return paragraphs, textbox_values, has_textbox
+
+
+DOCX_HEADER_FOOTER_PATTERN = re.compile(
+    r"^word/(?P<kind>header|footer)\d*\.xml$", re.IGNORECASE
+)
+
+
+def _docx_has_image_reference(part_xml: bytes) -> bool:
+    root = etree.fromstring(part_xml)
+    drawing_images = root.xpath(
+        ".//a:blip[@r:embed or @r:link]",
+        namespaces={
+            "a": "http://schemas.openxmlformats.org/drawingml/2006/main",
+            "r": R_NS,
+        },
+    )
+    legacy_images = root.xpath(".//*[local-name()='imagedata']")
+    return bool(drawing_images or legacy_images)
 
 
 def _extract_docx_photo(
@@ -371,35 +732,124 @@ def _extract_docx_photo(
 
 def parse_docx(data: bytes) -> ParsedResume:
     result = ParsedResume()
+    textbox_values: list[list[RichTextSpan]] = []
+    has_textbox = False
+    peripheral_paragraphs: list[ParsedParagraph] = []
+    peripheral_textbox_values: list[list[RichTextSpan]] = []
+    peripheral_textbox_parts: list[str] = []
+    unreadable_textbox_parts: list[str] = []
+    peripheral_image_parts: list[str] = []
     try:
         with zipfile.ZipFile(BytesIO(data)) as archive:
             document_xml = archive.read("word/document.xml")
-            paragraphs = _docx_paragraphs(document_xml)
+            paragraphs, textbox_values, has_textbox = _docx_paragraphs(document_xml)
             photo, extension, warning = _extract_docx_photo(archive, document_xml)
             result.photo_bytes = photo
             result.photo_extension = extension
             if warning:
                 result.warnings.append(warning)
+
+            supplemental_parts = [
+                name
+                for name in archive.namelist()
+                if DOCX_HEADER_FOOTER_PATTERN.fullmatch(name)
+            ]
+            supplemental_parts.sort(
+                key=lambda name: (
+                    0 if Path(name).name.lower().startswith("header") else 1,
+                    name,
+                )
+            )
+            for part_name in supplemental_parts:
+                match = DOCX_HEADER_FOOTER_PATTERN.fullmatch(part_name)
+                if match is None:
+                    continue
+                kind_label = "页眉" if match.group("kind").lower() == "header" else "页脚"
+                part_label = f"{kind_label} {Path(part_name).name}"
+                part_xml = archive.read(part_name)
+                try:
+                    part_paragraphs, part_textboxes, part_has_textbox = (
+                        _docx_paragraphs(part_xml)
+                    )
+                    part_has_image = _docx_has_image_reference(part_xml)
+                except etree.XMLSyntaxError:
+                    result.warnings.append(
+                        f"DOCX 的{part_label}无法解析，请在导入后核对原文。"
+                    )
+                    continue
+                peripheral_paragraphs.extend(part_paragraphs)
+                peripheral_textbox_values.extend(part_textboxes)
+                if part_textboxes:
+                    peripheral_textbox_parts.append(part_label)
+                elif part_has_textbox:
+                    unreadable_textbox_parts.append(part_label)
+                if part_has_image:
+                    peripheral_image_parts.append(part_label)
     except (zipfile.BadZipFile, KeyError, etree.XMLSyntaxError) as exc:
         raise ValueError(f"无法解析 DOCX：{exc}") from exc
 
     current_section: ResumeSection | None = None
     current_item: ResumeItem | None = None
-    unresolved: list[list[RichTextSpan]] = []
+    unresolved: list[list[RichTextSpan]] = list(textbox_values)
+
+    for paragraph in peripheral_paragraphs:
+        matched_contact, remainder = _consume_contacts(
+            result.profile, paragraph.spans
+        )
+        if matched_contact:
+            _preserve_profile_remainder(result, remainder, unresolved)
+            continue
+        candidate = _name_from_remainder(paragraph.text)
+        if candidate and not result.profile.name:
+            result.profile.name = candidate
+        elif paragraph.text != result.profile.name:
+            unresolved.append(paragraph.spans)
+    unresolved.extend(peripheral_textbox_values)
+
+    if textbox_values:
+        result.warnings.append(
+            "DOCX 中检测到文本框内容，已放入“待确认内容”以避免遗漏。"
+        )
+    elif has_textbox:
+        result.warnings.append(
+            "DOCX 中检测到无法可靠读取的文本框，请在导入后核对原文。"
+        )
+    if peripheral_textbox_parts:
+        part_names = "、".join(peripheral_textbox_parts)
+        result.warnings.append(
+            f"DOCX 页眉/页脚中检测到文本框内容（{part_names}），"
+            "已放入“待确认内容”以避免遗漏。"
+        )
+    if unreadable_textbox_parts:
+        part_names = "、".join(unreadable_textbox_parts)
+        result.warnings.append(
+            f"DOCX 页眉/页脚中检测到无法可靠读取的文本框（{part_names}），"
+            "请在导入后核对原文。"
+        )
+    if peripheral_image_parts:
+        part_names = "、".join(peripheral_image_parts)
+        result.warnings.append(
+            f"DOCX 页眉/页脚中检测到图片（{part_names}）；"
+            "当前不会将其作为简历照片自动导入，"
+            "请在导入后核对或重新上传照片。"
+        )
 
     for paragraph in paragraphs:
         value = paragraph.text
         kind = section_kind(value)
-        canonical_value = re.sub(r"\s+", "", value).rstrip("：:")
+        canonical_value = re.sub(r"[\s&/]+", "", value).rstrip("：:")
         _, possible_date = split_title_date(paragraph.spans)
         is_known_section = bool(CANONICAL_SECTION_PATTERN.fullmatch(canonical_value))
         is_heading_style = (
-            paragraph.style.lower().startswith("heading")
+            (
+                paragraph.style.lower().startswith("heading")
+                or paragraph.style.startswith("标题")
+            )
             and not possible_date
-            and len(value) <= 20
+            and len(value) <= 60
         )
 
-        if is_known_section or (is_heading_style and current_section is not None):
+        if is_known_section or is_heading_style:
             current_section = ResumeSection(
                 id=new_id(), kind=kind, title=value, items=[]
             )
@@ -408,7 +858,13 @@ def parse_docx(data: bytes) -> ParsedResume:
             continue
 
         if current_section is None:
-            if _contact_from_text(result.profile, value):
+            matched_contact, remainder = _consume_contacts(
+                result.profile, paragraph.spans
+            )
+            if matched_contact:
+                _preserve_profile_remainder(result, remainder, unresolved)
+                continue
+            if result.profile.name and value == result.profile.name:
                 continue
             if not result.profile.name and len(value) <= 20:
                 result.profile.name = value

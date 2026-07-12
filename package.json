@@ -10,6 +10,8 @@
     "start:open": "node ./bin/webresume.mjs --serve --open",
     "prod:open": "node ./bin/webresume.mjs --start",
     "update": "node ./bin/webresume.mjs --update",
+    "backup": "node ./bin/webresume.mjs --backup",
+    "restore": "node ./bin/webresume.mjs --restore",
     "test": "node ./bin/webresume.mjs --test"
   },
   "devDependencies": {

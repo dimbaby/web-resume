@@ -9,13 +9,14 @@ type Props = {
   onReady?: () => void;
 };
 
-async function waitForImages(container: HTMLElement) {
+export async function waitForImages(container: HTMLElement) {
   const images = Array.from(container.querySelectorAll("img"));
   await Promise.all(
     images.map(
       (image) =>
         new Promise<void>((resolve) => {
-          if (image.complete && image.naturalWidth > 0) {
+          // 已经失败的图片同样是 complete，不会再次派发 error 事件。
+          if (image.complete) {
             resolve();
             return;
           }

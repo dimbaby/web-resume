@@ -5,6 +5,7 @@ import { ResumePreview } from "./ResumePreview";
 
 const document: ResumeDocument = {
   id: "resume-1",
+  revision: 1,
   title: "测试简历",
   profile: {
     name: "张三",

@@ -58,6 +58,7 @@ export type ResumeAppearance = {
 
 export type ResumeDocument = {
   id: string;
+  revision: number;
   title: string;
   profile: ResumeProfile;
   appearance: ResumeAppearance;
@@ -66,13 +67,16 @@ export type ResumeDocument = {
   source: { filename: string; format: "md" | "docx" | "manual" };
   created_at: string;
   updated_at: string;
+  deleted_at?: string | null;
 };
 
 export type ResumeSummary = {
   id: string;
+  revision: number;
   title: string;
   source_filename: string;
   section_count: number;
   created_at: string;
   updated_at: string;
+  deleted_at?: string | null;
 };

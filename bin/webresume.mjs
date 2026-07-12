@@ -1,7 +1,13 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
-import { dirname, join } from "node:path";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
@@ -11,6 +17,9 @@ const npmCommand = isWindows ? "npm.cmd" : "npm";
 const prodUrl = "http://127.0.0.1:8000";
 const devUrl = "http://127.0.0.1:5173";
 const healthUrl = "http://127.0.0.1:8000/api/health";
+const dataDir = process.env.RESUME_DATA_DIR || join(projectDir, "data");
+const pidPath = join(dataDir, "webresume.pid");
+const scriptPath = fileURLToPath(import.meta.url);
 
 function usage() {
   console.log(`webresume - 本地简历管理器命令
@@ -20,6 +29,8 @@ function usage() {
   webresume --dev        开发模式：启动前后端热更新服务，并自动打开网页
   webresume --serve      仅启动生产服务，不重新构建
   webresume --update     更新代码和依赖，不覆盖本地修改
+  webresume --backup [路径]  创建包含简历、照片和原件的完整备份
+  webresume --restore 路径  从指定备份恢复数据
   webresume --test       运行后端和前端测试
   webresume --status     查看当前服务状态
   webresume --stop       停止当前本地服务
@@ -101,8 +112,55 @@ async function probe(url) {
   }
 }
 
+async function runningState() {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 900);
+  try {
+    const response = await fetch(healthUrl, { signal: controller.signal });
+    if (!response.ok) return null;
+    const body = await response.json();
+    if (body?.app === "web-resume") return "current";
+    if (body?.status !== "ok") return null;
+    const schemaResponse = await fetch(`${prodUrl}/openapi.json`, {
+      signal: controller.signal,
+    });
+    if (!schemaResponse.ok) return null;
+    const schema = await schemaResponse.json();
+    return schema?.info?.title === "Web Resume API" ? "legacy" : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function isRunning() {
-  return probe(healthUrl);
+  return (await runningState()) !== null;
+}
+
+function writePid(pid) {
+  mkdirSync(dirname(pidPath), { recursive: true });
+  writeFileSync(pidPath, String(pid), "utf8");
+}
+
+function clearPid(pid) {
+  if (!existsSync(pidPath)) return;
+  try {
+    const current = Number.parseInt(readFileSync(pidPath, "utf8").trim(), 10);
+    if (current === pid) unlinkSync(pidPath);
+  } catch {
+    // PID 文件只用于辅助识别；损坏时退回健康接口和端口检查。
+  }
+}
+
+function managedPid() {
+  if (!existsSync(pidPath)) return null;
+  try {
+    const pid = Number.parseInt(readFileSync(pidPath, "utf8").trim(), 10);
+    return Number.isSafeInteger(pid) && pid > 0 ? String(pid) : null;
+  } catch {
+    return null;
+  }
 }
 
 function openUrl(url) {
@@ -162,7 +220,11 @@ function waitForExit(child) {
 
 async function startProduction({ build = true, open = true } = {}) {
   ensureProject();
-  if (await isRunning()) {
+  const running = await runningState();
+  if (running === "legacy") {
+    console.log("检测到旧版 Web Resume 服务，正在停止后启动新版...");
+    await stopServer();
+  } else if (running === "current") {
     console.log(`Web Resume 已在运行：${prodUrl}`);
     if (open) openUrl(prodUrl);
     return;
@@ -176,7 +238,12 @@ async function startProduction({ build = true, open = true } = {}) {
   const child = spawnInherit(venvPythonPath(), serverArgs(), {
     env: { ...process.env, APP_ORIGIN: prodUrl },
   });
-  await waitForExit(child);
+  if (child.pid) writePid(child.pid);
+  try {
+    await waitForExit(child);
+  } finally {
+    if (child.pid) clearPid(child.pid);
+  }
 }
 
 async function startDev({ open = true } = {}) {
@@ -231,16 +298,16 @@ async function listenerPids() {
     return [
       ...new Set(
         output
-          .split(/\\r?\\n/)
+          .split(/\r?\n/)
           .filter((line) => line.includes(":8000") && /LISTENING/i.test(line))
-          .map((line) => line.trim().split(/\\s+/).at(-1))
+          .map((line) => line.trim().split(/\s+/).at(-1))
           .filter(Boolean),
       ),
     ];
   }
   const output = await commandOutput("lsof", ["-tiTCP:8000", "-sTCP:LISTEN"]);
   return output
-    .split(/\\s+/)
+    .split(/\s+/)
     .map((pid) => pid.trim())
     .filter(Boolean);
 }
@@ -250,7 +317,9 @@ async function stopServer() {
     console.log("当前没有检测到 Web Resume 服务。");
     return;
   }
-  const pids = await listenerPids();
+  const listenerIds = await listenerPids();
+  const recordedPid = managedPid();
+  const pids = recordedPid && listenerIds.includes(recordedPid) ? [recordedPid] : listenerIds;
   if (pids.length === 0) {
     console.log("检测到健康接口，但没有找到 8000 端口监听进程。");
     return;
@@ -259,6 +328,9 @@ async function stopServer() {
     for (const pid of pids) await run("taskkill", ["/PID", pid, "/F"]);
   } else {
     for (const pid of pids) process.kill(Number(pid));
+  }
+  for (let index = 0; index < 30 && (await isRunning()); index += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 100));
   }
   console.log("已停止 Web Resume 服务。");
 }
@@ -276,11 +348,24 @@ async function runTests() {
 
 async function updateApp() {
   if (!existsSync(projectDir)) throw new Error(`项目目录不存在：${projectDir}`);
-  if (await isRunning()) {
-    console.log("检测到 Web Resume 正在运行。建议更新完成后重新启动服务。");
+  const wasRunning = await isRunning();
+  if (wasRunning) {
+    console.log("检测到 Web Resume 正在运行，正在安全停止旧服务...");
+    await stopServer();
   }
+  await ensureVenv();
+  console.log("正在备份本地简历数据...");
+  await run(venvPythonPath(), ["-m", "backend.app.maintenance", "backup"]);
   console.log("正在拉取最新代码...");
   await run("git", ["pull", "--ff-only"]);
+  console.log("正在加载新版更新程序...");
+  await run(process.execPath, [scriptPath, "--finish-update"]);
+  if (wasRunning) {
+    console.log("旧服务已停止。请运行 webresume --start 启动更新后的版本。");
+  }
+}
+
+async function finishUpdate() {
   await ensureVenv();
   console.log("正在更新后端依赖...");
   await run(venvPythonPath(), ["-m", "pip", "install", "-r", "backend/requirements.txt"]);
@@ -290,6 +375,27 @@ async function updateApp() {
   console.log("正在构建生产版本...");
   await run(npmCommand, ["run", "build"]);
   console.log("更新完成。运行 webresume --start 或 npm run prod:open 即可启动。");
+}
+
+async function backupData(destination) {
+  await ensureVenv();
+  const args = ["-m", "backend.app.maintenance", "backup"];
+  if (destination) args.push(resolve(process.cwd(), destination));
+  await run(venvPythonPath(), args);
+}
+
+async function restoreData(source) {
+  if (!source) throw new Error("请提供备份文件路径：webresume --restore /path/to/backup.sqlite3");
+  if (await isRunning()) {
+    throw new Error("恢复数据前请先运行 webresume --stop。");
+  }
+  await ensureVenv();
+  await run(venvPythonPath(), [
+    "-m",
+    "backend.app.maintenance",
+    "restore",
+    resolve(process.cwd(), source),
+  ]);
 }
 
 async function main() {
@@ -322,6 +428,17 @@ async function main() {
     case "--update":
     case "update":
       await updateApp();
+      break;
+    case "--finish-update":
+      await finishUpdate();
+      break;
+    case "--backup":
+    case "backup":
+      await backupData(args[1]);
+      break;
+    case "--restore":
+    case "restore":
+      await restoreData(args[1]);
       break;
     case "--stop":
     case "stop":

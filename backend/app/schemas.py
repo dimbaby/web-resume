@@ -87,6 +87,8 @@ class ResumeDocument(BaseModel):
     sections: list[ResumeSection] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     source: SourceInfo = Field(default_factory=SourceInfo)
+    revision: int = Field(default=0, ge=0)
+    deleted_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
 
@@ -96,6 +98,8 @@ class ResumeSummary(BaseModel):
     title: str
     source_filename: str = ""
     section_count: int = 0
+    revision: int = Field(default=0, ge=0)
+    deleted_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
 
@@ -106,3 +110,4 @@ class DuplicateRequest(BaseModel):
 
 class RenameRequest(BaseModel):
     title: str = Field(min_length=1, max_length=120)
+    revision: int = Field(ge=0)

@@ -1,14 +1,9 @@
-from pathlib import Path
-
 from backend.app.parsers import parse_docx, parse_markdown, plain
+from backend.tests.fixtures import SAMPLE_MARKDOWN, build_sample_docx
 
 
-SOURCE_ROOT = Path(__file__).resolve().parents[3]
-
-
-def test_reference_markdown_is_structured_without_losing_core_content() -> None:
-    source = SOURCE_ROOT / "简历.md"
-    parsed = parse_markdown(source.read_bytes())
+def test_sample_markdown_is_structured_without_losing_core_content() -> None:
+    parsed = parse_markdown(SAMPLE_MARKDOWN)
 
     assert [section.title for section in parsed.sections[:2]] == ["教育经历", "项目经历"]
     assert len(parsed.sections) == 5
@@ -21,12 +16,11 @@ def test_reference_markdown_is_structured_without_losing_core_content() -> None:
     assert education.items[0].bullets[0].content[0].bold is True
 
 
-def test_reference_docx_survives_corrupt_embedded_photo() -> None:
-    source = SOURCE_ROOT / "示例用户简历.docx"
-    parsed = parse_docx(source.read_bytes())
+def test_sample_docx_survives_corrupt_embedded_photo() -> None:
+    parsed = parse_docx(build_sample_docx())
 
-    assert parsed.profile.name == "示例用户"
-    assert parsed.profile.email == "resume@example.com"
+    assert parsed.profile.name == "林安"
+    assert parsed.profile.email == "lin.an@example.com"
     assert [section.title for section in parsed.sections] == [
         "教育经历",
         "项目经历",
@@ -36,8 +30,8 @@ def test_reference_docx_survives_corrupt_embedded_photo() -> None:
     ]
     project = next(section for section in parsed.sections if section.title == "项目经历")
     skills = next(section for section in parsed.sections if section.title == "其他能力")
-    assert len(project.items) == 5
-    assert len(skills.items) == 2
+    assert len(project.items) == 1
+    assert len(skills.items) == 1
     assert any("照片无法读取" in warning for warning in parsed.warnings)
     assert parsed.photo_bytes is None
 
