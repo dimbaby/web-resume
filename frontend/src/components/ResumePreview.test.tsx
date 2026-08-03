@@ -16,6 +16,14 @@ const document: ResumeDocument = {
   appearance: {
     template: "reference",
     bullet_style: "triangle",
+    density: {
+      preset: "standard",
+      page_margin_vertical_mm: 19,
+      page_margin_horizontal_mm: 19,
+      font_size_pt: 10.9,
+      line_height: 1.52,
+      paragraph_spacing_percent: 100,
+    },
   },
   sections: [
     {
@@ -75,5 +83,31 @@ describe("ResumePreview", () => {
       />,
     );
     expect(container.querySelector(".resume-content")).toHaveClass("resume-bullet-none");
+  });
+
+  it("applies density values to the shared print DOM", () => {
+    const { container } = render(
+      <ResumePreview
+        document={{
+          ...document,
+          appearance: {
+            ...document.appearance,
+            density: {
+              preset: "dense",
+              page_margin_vertical_mm: 13,
+              page_margin_horizontal_mm: 14,
+              font_size_pt: 9.8,
+              line_height: 1.3,
+              paragraph_spacing_percent: 60,
+            },
+          },
+        }}
+      />,
+    );
+    const article = container.querySelector<HTMLElement>(".resume-content");
+    expect(article).toHaveClass("resume-density-dense");
+    expect(article?.style.getPropertyValue("--resume-font-size")).toBe("9.8pt");
+    expect(article?.style.getPropertyValue("--resume-line-height")).toBe("1.3");
+    expect(article?.style.getPropertyValue("--resume-section-gap")).toBe("1.38mm");
   });
 });

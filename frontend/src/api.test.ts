@@ -52,4 +52,19 @@ describe("api", () => {
     });
     expect(blob).toHaveBeenCalledOnce();
   });
+
+  it("encodes content library kind and query filters", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue([]),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await api.library({ kind: "project", query: "  C++ 数据  " });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/library?kind=project&query=C%2B%2B+%E6%95%B0%E6%8D%AE",
+      undefined,
+    );
+  });
 });

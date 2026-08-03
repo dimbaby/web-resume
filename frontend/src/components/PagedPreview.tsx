@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Previewer } from "pagedjs";
+import { makePageStylesheet } from "../printLayout";
 import type { ResumeDocument } from "../types";
 import { ResumePreview } from "./ResumePreview";
 
@@ -64,9 +65,13 @@ export function PagedPreview({ document, onPageCount, onReady }: Props) {
       window.document.body.appendChild(stagedTarget);
       try {
         const previewer = new Previewer();
+        const densityStylesheet = {
+          [new URL("/resume-density.css", window.location.href).href]:
+            makePageStylesheet(document.appearance),
+        };
         const flow = await previewer.preview(
           sourceRef.current.innerHTML,
-          ["/print.css"],
+          ["/print.css", densityStylesheet],
           stagedTarget,
         );
         if (run !== runRef.current) return;

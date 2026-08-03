@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 import time
+import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
@@ -10,7 +12,13 @@ from uuid import uuid4
 
 from pydantic import ValidationError
 
-from .schemas import ResumeDocument, ResumeSummary
+from .schemas import (
+    LibraryEntry,
+    ResumeDocument,
+    ResumeItem,
+    ResumeSummary,
+    SectionKind,
+)
 from .settings import DB_PATH, ensure_directories
 
 
@@ -74,6 +82,50 @@ def init_db() -> None:
             "CREATE INDEX IF NOT EXISTS idx_resumes_active_updated "
             "ON resumes(deleted_at, updated_at DESC)"
         )
+        library_table_exists = (
+            connection.execute(
+                "SELECT 1 FROM sqlite_master "
+                "WHERE type = 'table' AND name = 'library_entries'"
+            ).fetchone()
+            is not None
+        )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS library_entries (
+                id TEXT PRIMARY KEY,
+                content_hash TEXT NOT NULL UNIQUE,
+                section_kind TEXT NOT NULL,
+                section_title TEXT NOT NULL,
+                item_payload TEXT NOT NULL,
+                search_text TEXT NOT NULL,
+                source_resume_id TEXT NOT NULL,
+                source_resume_title TEXT NOT NULL,
+                source_filename TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+        library_columns = {
+            row["name"]
+            for row in connection.execute(
+                "PRAGMA table_info(library_entries)"
+            ).fetchall()
+        }
+        if "updated_at" not in library_columns:
+            connection.execute(
+                "ALTER TABLE library_entries ADD COLUMN updated_at TEXT"
+            )
+            connection.execute(
+                "UPDATE library_entries SET updated_at = created_at "
+                "WHERE updated_at IS NULL"
+            )
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_library_kind_created "
+            "ON library_entries(section_kind, created_at DESC)"
+        )
+        if not library_table_exists:
+            _sync_all_resumes_to_library(connection)
 
 
 def _serialize(document: ResumeDocument) -> str:
@@ -98,6 +150,151 @@ def _summary(document: ResumeDocument) -> ResumeSummary:
         created_at=document.created_at,
         updated_at=document.updated_at,
     )
+
+
+def _plain_text(spans: list[Any]) -> str:
+    return "".join(str(span.text) for span in spans)
+
+
+def _item_has_content(item: ResumeItem) -> bool:
+    if _plain_text(item.title).strip() or _plain_text(item.subtitle).strip():
+        return True
+    if item.date.strip():
+        return True
+    return any(_plain_text(bullet.content).strip() for bullet in item.bullets)
+
+
+def _item_identity_payload(item: ResumeItem) -> dict[str, Any]:
+    """Return stable item content without parser/editor generated identifiers."""
+    payload = item.model_dump(mode="json")
+    payload.pop("id", None)
+    for bullet in payload.get("bullets", []):
+        bullet.pop("id", None)
+    return payload
+
+
+def _library_content_hash(section_kind: SectionKind, item: ResumeItem) -> str:
+    identity = {
+        "section_kind": section_kind,
+        "item": _item_identity_payload(item),
+    }
+    canonical = json.dumps(
+        identity,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _library_search_text(
+    document: ResumeDocument,
+    section_title: str,
+    item: ResumeItem,
+) -> str:
+    parts = [
+        section_title,
+        document.title,
+        document.source.filename,
+        _plain_text(item.title),
+        _plain_text(item.subtitle),
+        item.date,
+        *(_plain_text(bullet.content) for bullet in item.bullets),
+    ]
+    return unicodedata.normalize("NFKC", "\n".join(parts)).casefold()
+
+
+def _sync_document_to_library(
+    connection: sqlite3.Connection,
+    document: ResumeDocument,
+) -> int:
+    inserted = 0
+    for section in document.sections:
+        for item in section.items:
+            if not _item_has_content(item):
+                continue
+            created_at = utcnow().isoformat()
+            cursor = connection.execute(
+                """
+                INSERT OR IGNORE INTO library_entries (
+                    id, content_hash, section_kind, section_title, item_payload,
+                    search_text, source_resume_id, source_resume_title,
+                    source_filename, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    uuid4().hex,
+                    _library_content_hash(section.kind, item),
+                    section.kind,
+                    section.title,
+                    json.dumps(item.model_dump(mode="json"), ensure_ascii=False),
+                    _library_search_text(document, section.title, item),
+                    document.id,
+                    document.title,
+                    document.source.filename,
+                    created_at,
+                    created_at,
+                ),
+            )
+            inserted += cursor.rowcount
+    return inserted
+
+
+def _sync_all_resumes_to_library(connection: sqlite3.Connection) -> int:
+    inserted = 0
+    rows = connection.execute(
+        "SELECT payload, revision, deleted_at FROM resumes ORDER BY created_at"
+    ).fetchall()
+    for row in rows:
+        inserted += _sync_document_to_library(
+            connection, _document_from_row(row)
+        )
+    return inserted
+
+
+def _library_entry_from_row(row: sqlite3.Row) -> LibraryEntry:
+    return LibraryEntry(
+        id=row["id"],
+        section_kind=row["section_kind"],
+        section_title=row["section_title"],
+        item=ResumeItem.model_validate(json.loads(row["item_payload"])),
+        source_resume_id=row["source_resume_id"],
+        source_resume_title=row["source_resume_title"],
+        source_filename=row["source_filename"],
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+    )
+
+
+def _escape_like(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def list_library_entries(
+    *,
+    section_kind: SectionKind | None = None,
+    query: str = "",
+) -> list[LibraryEntry]:
+    conditions: list[str] = []
+    parameters: list[str] = []
+    if section_kind is not None:
+        conditions.append("section_kind = ?")
+        parameters.append(section_kind)
+    normalized_query = unicodedata.normalize("NFKC", query.strip()).casefold()
+    if normalized_query:
+        conditions.append("search_text LIKE ? ESCAPE '\\'")
+        parameters.append(f"%{_escape_like(normalized_query)}%")
+    where = f" WHERE {' AND '.join(conditions)}" if conditions else ""
+    with connect() as connection:
+        rows = connection.execute(
+            "SELECT id, section_kind, section_title, item_payload, "
+            "source_resume_id, source_resume_title, source_filename, created_at, "
+            "updated_at "
+            f"FROM library_entries{where} ORDER BY created_at DESC, id DESC",
+            parameters,
+        ).fetchall()
+    return [_library_entry_from_row(row) for row in rows]
 
 
 def _select_row(
@@ -199,6 +396,7 @@ def create_resume(payload: dict[str, Any]) -> ResumeDocument:
                 document.updated_at.isoformat(),
             ),
         )
+        _sync_document_to_library(connection, document)
     return document
 
 

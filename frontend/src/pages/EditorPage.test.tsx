@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
 import { ApiError } from "../api";
-import type { ResumeDocument } from "../types";
+import type { LibraryEntry, ResumeDocument } from "../types";
 import { EditorPage } from "./EditorPage";
 
 const apiMock = vi.hoisted(() => ({
@@ -11,6 +11,7 @@ const apiMock = vi.hoisted(() => ({
   duplicate: vi.fn(),
   photo: vi.fn(),
   exportPdf: vi.fn(),
+  library: vi.fn(),
 }));
 
 vi.mock("../api", () => {
@@ -37,11 +38,22 @@ vi.mock("../components/SortableList", () => ({
 }));
 
 vi.mock("../components/SectionEditor", () => ({
-  SectionEditor: ({ section, onDeleteItem }: any) => (
+  SectionEditor: ({
+    section,
+    onDeleteItem,
+    onOpenItemLibrary,
+    onOpenBulletLibrary,
+  }: any) => (
     <div>
+      <button type="button" onClick={onOpenItemLibrary}>
+        打开条目内容库
+      </button>
       {section.items.map((item: any) => (
         <div key={item.id}>
           <span>{item.title[0]?.text}</span>
+          <button type="button" onClick={() => onOpenBulletLibrary(item.id)}>
+            打开要点内容库
+          </button>
           <button type="button" onClick={() => onDeleteItem(item.id)}>
             删除测试条目
           </button>
@@ -61,7 +73,18 @@ const baseDocument: ResumeDocument = {
     phone: "13800000000",
     photo_url: "",
   },
-  appearance: { template: "reference", bullet_style: "triangle" },
+  appearance: {
+    template: "reference",
+    bullet_style: "triangle",
+    density: {
+      preset: "standard",
+      page_margin_vertical_mm: 19,
+      page_margin_horizontal_mm: 19,
+      font_size_pt: 10.9,
+      line_height: 1.52,
+      paragraph_spacing_percent: 100,
+    },
+  },
   sections: [
     {
       id: "section-1",
@@ -82,6 +105,31 @@ const baseDocument: ResumeDocument = {
   ],
   warnings: [],
   source: { filename: "fixture.md", format: "md" },
+  created_at: "2026-01-01T00:00:00Z",
+  updated_at: "2026-01-01T00:00:00Z",
+};
+
+const libraryEntry: LibraryEntry = {
+  id: "library-entry-1",
+  section_kind: "project",
+  section_title: "项目经历",
+  item: {
+    id: "library-item-1",
+    title: [{ text: "历史风控项目", bold: true }],
+    subtitle: [{ text: "课程项目", italic: true }],
+    title_style: { bold: true, italic: false },
+    subtitle_style: { bold: false, italic: true },
+    date: "2025.01-2025.06",
+    bullets: [
+      {
+        id: "library-bullet-1",
+        content: [{ text: "使用 C++  建立可复用特征管线" }],
+      },
+    ],
+  },
+  source_resume_id: "source-resume",
+  source_resume_title: "完整基础简历",
+  source_filename: "完整简历.md",
   created_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-01T00:00:00Z",
 };
@@ -132,6 +180,7 @@ describe("EditorPage reliability", () => {
     apiMock.duplicate.mockReset();
     apiMock.photo.mockReset();
     apiMock.exportPdf.mockReset();
+    apiMock.library.mockReset().mockResolvedValue([structuredClone(libraryEntry)]);
   });
 
   afterEach(() => {
@@ -308,5 +357,126 @@ describe("EditorPage reliability", () => {
 
     expect(await screen.findByText("浏览器未能生成 PDF")).toBeInTheDocument();
     expect(screen.getByDisplayValue("初始版本")).toBeInTheDocument();
+  });
+
+  it("applies the single-page density preset and autosaves it", async () => {
+    vi.useFakeTimers();
+    renderEditor();
+    await act(async () => undefined);
+
+    fireEvent.click(screen.getByRole("button", { name: "单页密集" }));
+    expect(screen.getByRole("button", { name: "单页密集" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await act(() => vi.advanceTimersByTimeAsync(750));
+
+    expect(apiMock.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        appearance: expect.objectContaining({
+          density: {
+            preset: "dense",
+            page_margin_vertical_mm: 13,
+            page_margin_horizontal_mm: 14,
+            font_size_pt: 9.8,
+            line_height: 1.3,
+            paragraph_spacing_percent: 60,
+          },
+        }),
+      }),
+    );
+  });
+
+  it("marks advanced density adjustments as custom and saves the latest value", async () => {
+    vi.useFakeTimers();
+    renderEditor();
+    await act(async () => undefined);
+
+    fireEvent.change(screen.getByRole("slider", { name: "左右页边距" }), {
+      target: { value: "15" },
+    });
+    fireEvent.change(screen.getByRole("slider", { name: "正文字号" }), {
+      target: { value: "10.2" },
+    });
+    expect(screen.getByText("自定义")).toBeInTheDocument();
+    await act(() => vi.advanceTimersByTimeAsync(750));
+
+    expect(apiMock.save).toHaveBeenCalledTimes(1);
+    expect(apiMock.save.mock.calls[0][0].appearance.density).toMatchObject({
+      preset: "custom",
+      page_margin_horizontal_mm: 15,
+      font_size_pt: 10.2,
+    });
+  });
+
+  it("adds a complete historical item with fresh identifiers and autosaves it", async () => {
+    vi.useFakeTimers();
+    renderEditor();
+    await act(async () => undefined);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "打开条目内容库" }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(apiMock.library).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole("button", { name: "添加条目：历史风控项目" }));
+    await act(() => vi.advanceTimersByTimeAsync(750));
+
+    expect(apiMock.save).toHaveBeenCalledOnce();
+    const savedItem = apiMock.save.mock.calls[0][0].sections[0].items[1];
+    expect(savedItem).toMatchObject({
+      title: libraryEntry.item.title,
+      bullets: [expect.objectContaining({ content: libraryEntry.item.bullets[0].content })],
+    });
+    expect(savedItem.id).not.toBe(libraryEntry.item.id);
+    expect(savedItem.bullets[0].id).not.toBe(libraryEntry.item.bullets[0].id);
+  });
+
+  it("adds one historical bullet to the chosen item and keeps literal spacing", async () => {
+    vi.useFakeTimers();
+    renderEditor();
+    await act(async () => undefined);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "打开要点内容库" }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "添加要点：使用 C++ 建立可复用特征管线" }),
+    );
+    await act(() => vi.advanceTimersByTimeAsync(750));
+
+    expect(apiMock.save).toHaveBeenCalledOnce();
+    const savedBullet = apiMock.save.mock.calls[0][0].sections[0].items[0].bullets[0];
+    expect(savedBullet.content).toEqual(libraryEntry.item.bullets[0].content);
+    expect(savedBullet.id).not.toBe(libraryEntry.item.bullets[0].id);
+  });
+
+  it("retries the pending save before reloading the content library", async () => {
+    apiMock.save.mockRejectedValueOnce(new ApiError("版本号已变化", 409));
+    renderEditor();
+    await screen.findByDisplayValue("初始版本");
+
+    fireEvent.change(screen.getByRole("textbox", { name: "版本名称" }), {
+      target: { value: "尚未成功保存的版本" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "打开条目内容库" }));
+
+    await waitFor(() =>
+      expect(document.querySelector(".content-library-error")).toHaveTextContent("保存冲突"),
+    );
+    expect(apiMock.library).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "重试" }));
+
+    await waitFor(() => expect(apiMock.save).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(apiMock.library).toHaveBeenCalledOnce());
+    expect(apiMock.save.mock.calls[1][0]).toMatchObject({
+      title: "尚未成功保存的版本",
+      revision: 1,
+    });
   });
 });

@@ -4,6 +4,7 @@ import mimetypes
 from contextlib import asynccontextmanager
 from io import BytesIO
 from pathlib import Path
+from typing import Optional
 from uuid import uuid4
 
 from fastapi import (
@@ -26,10 +27,12 @@ from .exporter import export_pdf
 from .parsers import parse_resume
 from .schemas import (
     DuplicateRequest,
+    LibraryEntry,
     RenameRequest,
     ResumeDocument,
     ResumeProfile,
     ResumeSummary,
+    SectionKind,
 )
 from .settings import (
     ASSET_DIR,
@@ -89,6 +92,14 @@ def get_resumes() -> list[ResumeSummary]:
 @app.get("/api/trash", response_model=list[ResumeSummary])
 def get_trash() -> list[ResumeSummary]:
     return db.list_resumes(deleted_only=True)
+
+
+@app.get("/api/library", response_model=list[LibraryEntry])
+def get_library(
+    kind: Optional[SectionKind] = Query(default=None),
+    query: str = Query(default="", max_length=200),
+) -> list[LibraryEntry]:
+    return db.list_library_entries(section_kind=kind, query=query)
 
 
 @app.get("/api/resumes/{resume_id}", response_model=ResumeDocument)

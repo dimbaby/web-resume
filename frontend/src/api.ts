@@ -1,4 +1,4 @@
-import type { ResumeDocument, ResumeSummary } from "./types";
+import type { LibraryEntry, ResumeDocument, ResumeSummary, SectionKind } from "./types";
 
 export type RevisionedResumeDocument = ResumeDocument & { revision: number };
 
@@ -120,5 +120,13 @@ export const api = {
       method: "POST",
       body: form,
     });
+  },
+  library: (filters?: { kind?: SectionKind; query?: string }) => {
+    const search = new URLSearchParams();
+    if (filters?.kind) search.set("kind", filters.kind);
+    if (filters?.query?.trim()) search.set("query", filters.query.trim());
+    const query = search.toString();
+    const suffix = query ? `?${query}` : "";
+    return request<LibraryEntry[]>(`/api/library${suffix}`);
   },
 };

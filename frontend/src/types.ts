@@ -50,10 +50,21 @@ export type ResumeProfile = {
 
 export type TemplateStyle = "reference" | "ats" | "modern" | "compact" | "elegant";
 export type BulletStyle = "triangle" | "dot" | "dash" | "square" | "none";
+export type DensityPreset = "standard" | "compact" | "dense" | "custom";
+
+export type ResumeDensity = {
+  preset: DensityPreset;
+  page_margin_vertical_mm: number;
+  page_margin_horizontal_mm: number;
+  font_size_pt: number;
+  line_height: number;
+  paragraph_spacing_percent: number;
+};
 
 export type ResumeAppearance = {
   template: TemplateStyle;
   bullet_style: BulletStyle;
+  density: ResumeDensity;
 };
 
 export type ResumeDocument = {
@@ -79,4 +90,16 @@ export type ResumeSummary = {
   created_at: string;
   updated_at: string;
   deleted_at?: string | null;
+};
+
+export type LibraryEntry = {
+  id: string;
+  section_kind: SectionKind;
+  section_title: string;
+  item: ResumeItem;
+  source_resume_id: string;
+  source_resume_title: string;
+  source_filename: string;
+  created_at: string;
+  updated_at: string;
 };

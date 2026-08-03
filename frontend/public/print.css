@@ -6,8 +6,8 @@
 .resume-content {
   color: #111;
   font-family: "Times New Roman", "Songti SC", "SimSun", serif;
-  font-size: 10.9pt;
-  line-height: 1.52;
+  font-size: var(--resume-font-size, 10.9pt);
+  line-height: var(--resume-line-height, 1.52);
   letter-spacing: 0;
 }
 
@@ -16,13 +16,14 @@
 }
 
 .resume-header {
-  min-height: 34mm;
+  min-height: var(--resume-header-min-height, 34mm);
   position: relative;
   padding-top: 1.5mm;
   box-sizing: border-box;
 }
 
 .resume-header.has-photo {
+  min-height: max(32.5mm, var(--resume-header-min-height, 34mm));
   padding-right: 29mm;
 }
 
@@ -31,7 +32,7 @@
   font-size: 17pt;
   font-weight: 700;
   line-height: 1.2;
-  margin: 0 0 7mm;
+  margin: 0 0 var(--resume-name-bottom-gap, 7mm);
   text-align: center;
 }
 
@@ -59,7 +60,7 @@
 }
 
 .resume-section {
-  margin-top: 2.3mm;
+  margin-top: var(--resume-section-gap, 2.3mm);
 }
 
 .resume-section-title {
@@ -68,14 +69,14 @@
   font-size: 15pt;
   font-weight: 700;
   line-height: 1.35;
-  margin: 0 0 1.7mm;
-  padding-bottom: 0.7mm;
+  margin: 0 0 var(--resume-section-title-gap, 1.7mm);
+  padding-bottom: var(--resume-section-title-padding, 0.7mm);
 }
 
 .resume-template-ats {
   font-family: Arial, "Microsoft YaHei", "SimSun", sans-serif;
-  font-size: 10.4pt;
-  line-height: 1.45;
+  font-size: var(--resume-font-size, 10.4pt);
+  line-height: var(--resume-line-height, 1.45);
 }
 
 .resume-template-ats .resume-name {
@@ -108,31 +109,31 @@
 }
 
 .resume-template-compact {
-  font-size: 9.8pt;
-  line-height: 1.38;
+  font-size: var(--resume-font-size, 9.8pt);
+  line-height: var(--resume-line-height, 1.38);
 }
 
 .resume-template-compact .resume-header {
-  min-height: 29mm;
+  min-height: var(--resume-header-min-height, 29mm);
 }
 
 .resume-template-compact .resume-name {
   font-size: 16pt;
-  margin-bottom: 5mm;
+  margin-bottom: var(--resume-name-bottom-gap, 5mm);
 }
 
 .resume-template-compact .resume-section {
-  margin-top: 1.5mm;
+  margin-top: var(--resume-section-gap, 1.5mm);
 }
 
 .resume-template-compact .resume-section-title {
   font-size: 13.2pt;
-  margin-bottom: 1.1mm;
-  padding-bottom: 0.4mm;
+  margin-bottom: var(--resume-section-title-gap, 1.1mm);
+  padding-bottom: var(--resume-section-title-padding, 0.4mm);
 }
 
 .resume-template-compact .resume-item {
-  margin-bottom: 1.1mm;
+  margin-bottom: var(--resume-item-gap, 1.1mm);
 }
 
 .resume-template-compact .resume-item-header {
@@ -141,7 +142,7 @@
 
 .resume-template-elegant {
   font-family: Georgia, "Times New Roman", "Songti SC", "SimSun", serif;
-  font-size: 10.6pt;
+  font-size: var(--resume-font-size, 10.6pt);
 }
 
 .resume-template-elegant .resume-name {
@@ -165,7 +166,7 @@
 
 .resume-item {
   break-inside: avoid;
-  margin-bottom: 1.7mm;
+  margin-bottom: var(--resume-item-gap, 1.7mm);
 }
 
 .resume-item-header {
@@ -174,7 +175,7 @@
   align-items: baseline;
   column-gap: 6mm;
   font-size: 12pt;
-  line-height: 1.4;
+  line-height: var(--resume-item-line-height, 1.4);
 }
 
 .resume-item-title {
@@ -186,7 +187,7 @@
 }
 
 .resume-item-subtitle {
-  margin: 0.5mm 0 0.6mm;
+  margin: var(--resume-subtitle-top, 0.5mm) 0 var(--resume-subtitle-bottom, 0.6mm);
 }
 
 .resume-text-bold {
@@ -199,7 +200,7 @@
 
 .resume-bullets {
   list-style: none;
-  margin: 0.5mm 0 0;
+  margin: var(--resume-bullets-top, 0.5mm) 0 0;
   padding: 0;
 }
 
@@ -214,20 +215,18 @@
   content: "➢";
   font-family: "Arial Unicode MS", "Songti SC", serif;
   font-size: 9pt;
-  line-height: 1.82;
+  line-height: inherit;
 }
 
 .resume-bullet-dot .resume-bullet::before {
   content: "•";
   font-size: 11pt;
-  line-height: 1.45;
 }
 
 .resume-bullet-dash .resume-bullet::before {
   content: "-";
   font-family: "Times New Roman", "Songti SC", serif;
   font-size: 10pt;
-  line-height: 1.65;
 }
 
 .resume-bullet-square .resume-bullet::before {

@@ -22,7 +22,18 @@ const document: ResumeDocument = {
     phone: "13800000000",
     photo_url: "",
   },
-  appearance: { template: "reference", bullet_style: "triangle" },
+  appearance: {
+    template: "reference",
+    bullet_style: "triangle",
+    density: {
+      preset: "standard",
+      page_margin_vertical_mm: 19,
+      page_margin_horizontal_mm: 19,
+      font_size_pt: 10.9,
+      line_height: 1.52,
+      paragraph_spacing_percent: 100,
+    },
+  },
   sections: [
     { id: "project", kind: "project", title: "项目经历", items: [] },
     {

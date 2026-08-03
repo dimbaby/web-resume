@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import {
   ArrowLeft,
   Check,
@@ -11,19 +11,33 @@ import {
 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ApiError, api, type RevisionedResumeDocument } from "../api";
+import { appendLibraryBullet, appendLibraryItem } from "../contentLibrary";
+import {
+  ContentLibraryDialog,
+  type ContentLibraryTarget,
+} from "../components/ContentLibraryDialog";
 import { NameDialog } from "../components/NameDialog";
 import { PagedPreview } from "../components/PagedPreview";
 import { SectionEditor } from "../components/SectionEditor";
 import { SortableList } from "../components/SortableList";
+import {
+  DEFAULT_APPEARANCE,
+  DENSITY_LIMITS,
+  makeDensityPreset,
+  normalizeAppearance,
+} from "../printLayout";
 import type {
   BulletStyle,
+  DensityPreset,
+  LibraryEntry,
   ResumeBullet,
   ResumeAppearance,
+  ResumeDensity,
   ResumeItem,
   ResumeSection,
   TemplateStyle,
 } from "../types";
-import { uid } from "../utils";
+import { plain, uid } from "../utils";
 
 type SaveState = "saved" | "saving" | "error";
 
@@ -38,11 +52,6 @@ type UndoAction =
       bullet: ResumeBullet;
     }
   | { kind: "photo"; photoUrl: string };
-
-const DEFAULT_APPEARANCE: ResumeAppearance = {
-  template: "reference",
-  bullet_style: "triangle",
-};
 
 const TEMPLATE_OPTIONS: { value: TemplateStyle; label: string; hint: string }[] = [
   {
@@ -79,6 +88,37 @@ const BULLET_OPTIONS: { value: BulletStyle; label: string }[] = [
   { value: "square", label: "方块 ▪" },
   { value: "none", label: "无符号" },
 ];
+
+const DENSITY_OPTIONS: {
+  value: Exclude<DensityPreset, "custom">;
+  label: string;
+  summary: string;
+  hint: string;
+}[] = [
+  {
+    value: "standard",
+    label: "标准",
+    summary: "舒适留白",
+    hint: "保留舒适留白，适合内容已经较精简的简历。",
+  },
+  {
+    value: "compact",
+    label: "紧凑",
+    summary: "优先收间距",
+    hint: "优先收紧页边距和段落留白，字号只做小幅调整。",
+  },
+  {
+    value: "dense",
+    label: "单页密集",
+    summary: "接近安全下限",
+    hint: "使用安全下限排版；仍超过一页时应继续精简内容。",
+  },
+];
+
+function densityRangeStyle(value: number, min: number, max: number): CSSProperties {
+  const progress = Math.min(100, Math.max(0, ((value - min) / (max - min)) * 100));
+  return { "--range-progress": `${progress}%` } as CSSProperties;
+}
 
 function insertAt<T>(values: T[], index: number, value: T) {
   const next = [...values];
@@ -147,6 +187,11 @@ export function EditorPage() {
   const [operationError, setOperationError] = useState("");
   const [exporting, setExporting] = useState(false);
   const [copyDialogOpen, setCopyDialogOpen] = useState(false);
+  const [libraryTarget, setLibraryTarget] = useState<ContentLibraryTarget | null>(null);
+  const [libraryEntries, setLibraryEntries] = useState<LibraryEntry[]>([]);
+  const [libraryLoading, setLibraryLoading] = useState(false);
+  const [libraryError, setLibraryError] = useState("");
+  const [libraryNotice, setLibraryNotice] = useState("");
   const loadedRef = useRef(false);
   const mountedRef = useRef(true);
   const documentRef = useRef<RevisionedResumeDocument | null>(null);
@@ -301,6 +346,21 @@ export function EditorPage() {
     }
   }
 
+  async function openContentLibrary(target: ContentLibraryTarget) {
+    setLibraryTarget(target);
+    setLibraryNotice("");
+    setLibraryError("");
+    setLibraryLoading(true);
+    try {
+      await flushSave();
+      setLibraryEntries(await api.library());
+    } catch (reason) {
+      setLibraryError(operationMessage(reason, "读取个人内容库失败"));
+    } finally {
+      setLibraryLoading(false);
+    }
+  }
+
   if (loadError) {
     return (
       <main className="center-state">
@@ -315,13 +375,87 @@ export function EditorPage() {
     return <main className="center-state">正在打开简历…</main>;
   }
   const currentDocument = document;
-  const appearance = document.appearance ?? DEFAULT_APPEARANCE;
+  const appearance = normalizeAppearance(document.appearance ?? DEFAULT_APPEARANCE);
 
   function updateAppearance(next: Partial<ResumeAppearance>) {
     replaceDocument((current) => ({
       ...current,
-      appearance: { ...(current.appearance ?? DEFAULT_APPEARANCE), ...next },
+      appearance: { ...normalizeAppearance(current.appearance), ...next },
     }));
+  }
+
+  function selectTemplate(template: TemplateStyle) {
+    replaceDocument((current) => {
+      const currentAppearance = normalizeAppearance(current.appearance);
+      const preset = currentAppearance.density.preset;
+      return {
+        ...current,
+        appearance: {
+          ...currentAppearance,
+          template,
+          density:
+            preset === "custom"
+              ? currentAppearance.density
+              : makeDensityPreset(template, preset),
+        },
+      };
+    });
+  }
+
+  function applyDensityPreset(preset: Exclude<DensityPreset, "custom">) {
+    updateAppearance({ density: makeDensityPreset(appearance.template, preset) });
+  }
+
+  function updateDensity(next: Partial<ResumeDensity>) {
+    replaceDocument((current) => {
+      const currentAppearance = normalizeAppearance(current.appearance);
+      return {
+        ...current,
+        appearance: {
+          ...currentAppearance,
+          density: {
+            ...currentAppearance.density,
+            ...next,
+            preset: "custom",
+          },
+        },
+      };
+    });
+  }
+
+  function addItemFromLibrary(entry: LibraryEntry) {
+    const current = documentRef.current;
+    if (!current || libraryTarget?.mode !== "item") return;
+    const result = appendLibraryItem(current, libraryTarget.sectionId, entry);
+    const title = plain(entry.item.title).trim() || "未命名条目";
+    if (!result.added) {
+      setLibraryNotice(`“${title}”的相同内容已经在当前模块中。`);
+      return;
+    }
+    replaceDocument(result.document);
+    setLibraryNotice(`已加入“${title}”，可以继续选择其他内容。`);
+  }
+
+  function addBulletFromLibrary(entry: LibraryEntry, bullet: ResumeBullet) {
+    const current = documentRef.current;
+    if (!current || libraryTarget?.mode !== "bullet") return;
+    const result = appendLibraryBullet(
+      current,
+      libraryTarget.sectionId,
+      libraryTarget.itemId,
+      bullet,
+    );
+    if (!result.added) {
+      setLibraryNotice("相同要点已经在当前条目中。");
+      return;
+    }
+    replaceDocument(result.document);
+    const sourceTitle = plain(entry.item.title).trim();
+    setLibraryNotice(
+      sourceTitle
+        ? `已从“${sourceTitle}”补充一条要点。`
+        : "已补充一条历史要点。",
+    );
   }
 
   function updateSection(section: ResumeSection) {
@@ -541,6 +675,23 @@ export function EditorPage() {
           }}
         />
       )}
+      {libraryTarget && (
+        <ContentLibraryDialog
+          document={document}
+          entries={libraryEntries}
+          target={libraryTarget}
+          loading={libraryLoading}
+          error={libraryError}
+          notice={libraryNotice}
+          onClose={() => {
+            setLibraryTarget(null);
+            setLibraryNotice("");
+          }}
+          onRetry={() => void openContentLibrary(libraryTarget)}
+          onAddItem={addItemFromLibrary}
+          onAddBullet={addBulletFromLibrary}
+        />
+      )}
 
       <div className="editor-workspace">
         <aside className="structure-panel">
@@ -641,12 +792,12 @@ export function EditorPage() {
                 <h2>模板与符号</h2>
               </div>
             </div>
-            <label>
+            <label className="styled-select-field">
               模板样式
               <select
                 value={appearance.template}
                 onChange={(event) =>
-                  updateAppearance({ template: event.target.value as TemplateStyle })
+                  selectTemplate(event.target.value as TemplateStyle)
                 }
               >
                 {TEMPLATE_OPTIONS.map((option) => (
@@ -659,7 +810,177 @@ export function EditorPage() {
             <p className="style-hint">
               {TEMPLATE_OPTIONS.find((option) => option.value === appearance.template)?.hint}
             </p>
-            <label>
+            <div className="density-control">
+              <div className="density-label-row">
+                <span>版面密度</span>
+                {appearance.density.preset === "custom" && (
+                  <span className="density-custom-pill">自定义</span>
+                )}
+              </div>
+              <div className="density-preset-group" role="group" aria-label="版面密度预设">
+                {DENSITY_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    aria-label={option.label}
+                    aria-pressed={appearance.density.preset === option.value}
+                    className={
+                      appearance.density.preset === option.value ? "selected" : ""
+                    }
+                    onClick={() => applyDensityPreset(option.value)}
+                  >
+                    <span className="density-preset-name">
+                      {appearance.density.preset === option.value && <Check size={13} />}
+                      {option.label}
+                    </span>
+                    <small>{option.summary}</small>
+                  </button>
+                ))}
+              </div>
+              <p className="style-hint density-hint">
+                {appearance.density.preset === "custom"
+                  ? "已使用自定义排版参数；点击任一预设可快速恢复成套设置。"
+                  : DENSITY_OPTIONS.find(
+                      (option) => option.value === appearance.density.preset,
+                    )?.hint}
+              </p>
+            </div>
+
+            <details className="density-advanced">
+              <summary>
+                <span>高级排版</span>
+                <span>页边距、字号与间距</span>
+              </summary>
+              <div className="density-slider-list">
+                <label className="density-slider">
+                  <span>
+                    上下页边距
+                    <output>{appearance.density.page_margin_vertical_mm} mm</output>
+                  </span>
+                  <input
+                    type="range"
+                    aria-label="上下页边距"
+                    min={DENSITY_LIMITS.pageMarginVerticalMm.min}
+                    max={DENSITY_LIMITS.pageMarginVerticalMm.max}
+                    step={DENSITY_LIMITS.pageMarginVerticalMm.step}
+                    value={appearance.density.page_margin_vertical_mm}
+                    style={densityRangeStyle(
+                      appearance.density.page_margin_vertical_mm,
+                      DENSITY_LIMITS.pageMarginVerticalMm.min,
+                      DENSITY_LIMITS.pageMarginVerticalMm.max,
+                    )}
+                    onChange={(event) =>
+                      updateDensity({ page_margin_vertical_mm: Number(event.target.value) })
+                    }
+                  />
+                </label>
+                <label className="density-slider">
+                  <span>
+                    左右页边距
+                    <output>{appearance.density.page_margin_horizontal_mm} mm</output>
+                  </span>
+                  <input
+                    type="range"
+                    aria-label="左右页边距"
+                    min={DENSITY_LIMITS.pageMarginHorizontalMm.min}
+                    max={DENSITY_LIMITS.pageMarginHorizontalMm.max}
+                    step={DENSITY_LIMITS.pageMarginHorizontalMm.step}
+                    value={appearance.density.page_margin_horizontal_mm}
+                    style={densityRangeStyle(
+                      appearance.density.page_margin_horizontal_mm,
+                      DENSITY_LIMITS.pageMarginHorizontalMm.min,
+                      DENSITY_LIMITS.pageMarginHorizontalMm.max,
+                    )}
+                    onChange={(event) =>
+                      updateDensity({ page_margin_horizontal_mm: Number(event.target.value) })
+                    }
+                  />
+                </label>
+                <label className="density-slider">
+                  <span>
+                    行间距
+                    <output>{appearance.density.line_height.toFixed(2)}</output>
+                  </span>
+                  <input
+                    type="range"
+                    aria-label="行间距"
+                    min={DENSITY_LIMITS.lineHeight.min}
+                    max={DENSITY_LIMITS.lineHeight.max}
+                    step={DENSITY_LIMITS.lineHeight.step}
+                    value={appearance.density.line_height}
+                    style={densityRangeStyle(
+                      appearance.density.line_height,
+                      DENSITY_LIMITS.lineHeight.min,
+                      DENSITY_LIMITS.lineHeight.max,
+                    )}
+                    onChange={(event) =>
+                      updateDensity({ line_height: Number(event.target.value) })
+                    }
+                  />
+                </label>
+                <label className="density-slider">
+                  <span>
+                    段间距
+                    <output>{appearance.density.paragraph_spacing_percent}%</output>
+                  </span>
+                  <input
+                    type="range"
+                    aria-label="段间距"
+                    min={DENSITY_LIMITS.paragraphSpacingPercent.min}
+                    max={DENSITY_LIMITS.paragraphSpacingPercent.max}
+                    step={DENSITY_LIMITS.paragraphSpacingPercent.step}
+                    value={appearance.density.paragraph_spacing_percent}
+                    style={densityRangeStyle(
+                      appearance.density.paragraph_spacing_percent,
+                      DENSITY_LIMITS.paragraphSpacingPercent.min,
+                      DENSITY_LIMITS.paragraphSpacingPercent.max,
+                    )}
+                    onChange={(event) =>
+                      updateDensity({
+                        paragraph_spacing_percent: Number(event.target.value),
+                      })
+                    }
+                  />
+                </label>
+                <label className="density-slider font-size-slider">
+                  <span>
+                    正文字号
+                    <output>{appearance.density.font_size_pt.toFixed(1)} pt</output>
+                  </span>
+                  <input
+                    type="range"
+                    aria-label="正文字号"
+                    min={DENSITY_LIMITS.fontSizePt.min}
+                    max={DENSITY_LIMITS.fontSizePt.max}
+                    step={DENSITY_LIMITS.fontSizePt.step}
+                    value={appearance.density.font_size_pt}
+                    style={densityRangeStyle(
+                      appearance.density.font_size_pt,
+                      DENSITY_LIMITS.fontSizePt.min,
+                      DENSITY_LIMITS.fontSizePt.max,
+                    )}
+                    onChange={(event) =>
+                      updateDensity({ font_size_pt: Number(event.target.value) })
+                    }
+                  />
+                  <small>建议最后调整；优先压缩页边距和段落留白。</small>
+                </label>
+              </div>
+              {(appearance.density.font_size_pt < 10 ||
+                appearance.density.line_height < 1.34) && (
+                <p className="density-caution" role="note">
+                  当前属于密集排版，导出后请按 100% 比例检查打印可读性。
+                </p>
+              )}
+              <button
+                type="button"
+                className="text-button compact density-reset"
+                onClick={() => applyDensityPreset("standard")}
+              >
+                恢复标准密度
+              </button>
+            </details>
+            <label className="styled-select-field">
               要点符号
               <select
                 value={appearance.bullet_style}
@@ -700,6 +1021,16 @@ export function EditorPage() {
                 onDeleteBullet={(itemId, bulletId) =>
                   deleteBullet(section.id, itemId, bulletId)
                 }
+                onOpenItemLibrary={() =>
+                  void openContentLibrary({ mode: "item", sectionId: section.id })
+                }
+                onOpenBulletLibrary={(itemId) =>
+                  void openContentLibrary({
+                    mode: "bullet",
+                    sectionId: section.id,
+                    itemId,
+                  })
+                }
               />
             )}
           />
@@ -726,8 +1057,18 @@ export function EditorPage() {
               <span className="eyebrow">LIVE A4 PREVIEW</span>
               <strong>实时成品预览</strong>
             </div>
-            <span className={pageCount > 2 ? "page-pill warning" : "page-pill"}>
-              {pageCount || "–"} 页{pageCount > 2 ? " · 建议精简" : ""}
+            <span
+              className={`page-pill${
+                pageCount === 1 ? " success" : pageCount > 2 ? " danger" : pageCount > 1 ? " warning" : ""
+              }`}
+            >
+              {pageCount === 1
+                ? "1 页 · 单页完成"
+                : pageCount === 2
+                  ? "2 页 · 超出单页"
+                  : pageCount > 2
+                    ? `${pageCount} 页 · 建议精简`
+                    : "– 页"}
             </span>
           </div>
           <PagedPreview document={document} onPageCount={setPageCount} />

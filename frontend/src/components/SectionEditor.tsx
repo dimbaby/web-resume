@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { ChevronDown, Plus, Trash2 } from "lucide-react";
+import { BookOpen, ChevronDown, Plus, Trash2 } from "lucide-react";
 import type { ResumeBullet, ResumeItem, ResumeSection, TextStyle } from "../types";
 import { plain, rich, styleRichText, uid } from "../utils";
 import { SortableList } from "./SortableList";
@@ -11,6 +11,8 @@ type Props = {
   onDeleteSection: () => void;
   onDeleteItem: (itemId: string) => void;
   onDeleteBullet: (itemId: string, bulletId: string) => void;
+  onOpenItemLibrary: () => void;
+  onOpenBulletLibrary: (itemId: string) => void;
 };
 
 function emptyItem(): ResumeItem {
@@ -36,8 +38,25 @@ export function SectionEditor({
   onDeleteSection,
   onDeleteItem,
   onDeleteBullet,
+  onOpenItemLibrary,
+  onOpenBulletLibrary,
 }: Props) {
   const [expanded, setExpanded] = useState(false);
+  const [collapsedItemIds, setCollapsedItemIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+
+  function toggleItemCollapsed(itemId: string) {
+    setCollapsedItemIds((current) => {
+      const next = new Set(current);
+      if (next.has(itemId)) {
+        next.delete(itemId);
+      } else {
+        next.add(itemId);
+      }
+      return next;
+    });
+  }
 
   function updateItem(next: ResumeItem) {
     onChange({
@@ -109,11 +128,26 @@ export function SectionEditor({
   function renderItem(item: ResumeItem, itemHandle: ReactNode) {
     const titleStyle = item.title_style ?? { bold: true, italic: false };
     const subtitleStyle = item.subtitle_style ?? { bold: false, italic: true };
+    const itemTitle = plain(item.title).trim() || "未命名条目";
+    const collapsed = collapsedItemIds.has(item.id);
     return (
-      <div className="item-editor">
+      <div className={collapsed ? "item-editor collapsed" : "item-editor"}>
         <div className="item-editor-heading">
           {itemHandle}
-          <span>子条目</span>
+          <div className="item-editor-identity">
+            <span className="hierarchy-chip item-level-chip">条目层</span>
+            <strong title={itemTitle}>{itemTitle}</strong>
+          </div>
+          <button
+            type="button"
+            className={collapsed ? "item-toggle" : "item-toggle expanded"}
+            aria-label={`${collapsed ? "展开" : "折叠"}条目：${itemTitle}`}
+            aria-expanded={!collapsed}
+            title={collapsed ? "展开条目" : "折叠条目，方便拖动排序"}
+            onClick={() => toggleItemCollapsed(item.id)}
+          >
+            <ChevronDown size={16} />
+          </button>
           <button
             type="button"
             className="icon-button danger subtle"
@@ -123,75 +157,109 @@ export function SectionEditor({
             <Trash2 size={16} />
           </button>
         </div>
-        <div className="field-grid two-columns">
-          <label>
-            名称
-            <textarea
-              value={plain(item.title)}
-              rows={2}
-              placeholder="如：车险纯保费建模项目"
-              onChange={(event) =>
+        {!collapsed && (
+          <>
+            <div className="field-grid two-columns">
+              <label>
+                名称
+                <textarea
+                  value={plain(item.title)}
+                  rows={2}
+                  placeholder="如：车险纯保费建模项目"
+                  onChange={(event) =>
+                    updateItem({
+                      ...item,
+                      title_style: titleStyle,
+                      title: rich(event.target.value, titleStyle),
+                    })
+                  }
+                />
+              </label>
+              <label>
+                时间
+                <input
+                  value={item.date}
+                  placeholder="2025.12-2026.01"
+                  onChange={(event) => updateItem({ ...item, date: event.target.value })}
+                />
+              </label>
+            </div>
+            <label>
+              单位、角色或副标题
+              <textarea
+                value={plain(item.subtitle)}
+                rows={2}
+                placeholder="如：广义线性模型课程报告"
+                onChange={(event) =>
+                  updateItem({
+                    ...item,
+                    subtitle_style: subtitleStyle,
+                    subtitle: rich(event.target.value, subtitleStyle),
+                  })
+                }
+              />
+            </label>
+            <div className="format-control-row">
+              {renderStyleControls("主标题", titleStyle, (style) =>
                 updateItem({
                   ...item,
-                  title_style: titleStyle,
-                  title: rich(event.target.value, titleStyle),
-                })
-              }
-            />
-          </label>
-          <label>
-            时间
-            <input
-              value={item.date}
-              placeholder="2025.12-2026.01"
-              onChange={(event) => updateItem({ ...item, date: event.target.value })}
-            />
-          </label>
-        </div>
-        <label>
-          单位、角色或副标题
-          <textarea
-            value={plain(item.subtitle)}
-            rows={2}
-            placeholder="如：广义线性模型课程报告"
-            onChange={(event) =>
-              updateItem({
-                ...item,
-                subtitle_style: subtitleStyle,
-                subtitle: rich(event.target.value, subtitleStyle),
-              })
-            }
-          />
-        </label>
-        <div className="format-control-row">
-          {renderStyleControls("主标题", titleStyle, (style) =>
-            updateItem({
-              ...item,
-              title_style: style,
-              title: styleRichText(item.title, style),
-            }),
-          )}
-          {renderStyleControls("副标题", subtitleStyle, (style) =>
-            updateItem({
-              ...item,
-              subtitle_style: style,
-              subtitle: styleRichText(item.subtitle, style),
-            }),
-          )}
-        </div>
-        <SortableList
-          items={item.bullets}
-          className="bullet-list-editor"
-          onChange={(bullets) => updateItem({ ...item, bullets })}
-          renderItem={(bullet, bulletHandle) => renderBullet(item, bullet, bulletHandle)}
-        />
-        <button
-          type="button"
-          className="text-button compact"
-          onClick={() => updateItem({ ...item, bullets: [...item.bullets, emptyBullet()] })}
-        >
-          <Plus size={14} /> 添加要点
-        </button>
+                  title_style: style,
+                  title: styleRichText(item.title, style),
+                }),
+              )}
+              {renderStyleControls("副标题", subtitleStyle, (style) =>
+                updateItem({
+                  ...item,
+                  subtitle_style: style,
+                  subtitle: styleRichText(item.subtitle, style),
+                }),
+              )}
+            </div>
+            <section
+              className="bullet-editor-group"
+              aria-label={`${itemTitle}的内容要点`}
+            >
+              <div className="bullet-group-heading">
+                <div>
+                  <span className="hierarchy-chip bullet-level-chip">要点层</span>
+                  <strong>内容要点</strong>
+                </div>
+                <span>{item.bullets.length} 条 · 可拖动排序</span>
+              </div>
+              {item.bullets.length === 0 && (
+                <p className="bullet-empty-state">
+                  当前没有要点，可以新建或从个人库挑选。
+                </p>
+              )}
+              <SortableList
+                items={item.bullets}
+                className="bullet-list-editor"
+                onChange={(bullets) => updateItem({ ...item, bullets })}
+                renderItem={(bullet, bulletHandle) =>
+                  renderBullet(item, bullet, bulletHandle)
+                }
+              />
+              <div className="library-context-actions bullet-library-actions">
+                <button
+                  type="button"
+                  className="text-button compact hierarchy-action primary"
+                  onClick={() =>
+                    updateItem({ ...item, bullets: [...item.bullets, emptyBullet()] })
+                  }
+                >
+                  <Plus size={14} /> 新增一条要点
+                </button>
+                <button
+                  type="button"
+                  className="text-button compact hierarchy-action library-action-button"
+                  onClick={() => onOpenBulletLibrary(item.id)}
+                >
+                  <BookOpen size={14} /> 从库中选择要点
+                </button>
+              </div>
+            </section>
+          </>
+        )}
       </div>
     );
   }
@@ -232,13 +300,33 @@ export function SectionEditor({
             onChange={(items) => onChange({ ...section, items })}
             renderItem={renderItem}
           />
-          <button
-            type="button"
-            className="text-button"
-            onClick={() => onChange({ ...section, items: [...section.items, emptyItem()] })}
-          >
-            <Plus size={15} /> 添加子条目
-          </button>
+          <div className="section-library-actions">
+            <div className="section-action-copy">
+              <span className="hierarchy-chip item-level-chip">条目层</span>
+              <div>
+                <strong>添加完整条目</strong>
+                <small>包含名称、时间、副标题和内容要点</small>
+              </div>
+            </div>
+            <div className="library-context-actions">
+              <button
+                type="button"
+                className="text-button hierarchy-action primary"
+                onClick={() =>
+                  onChange({ ...section, items: [...section.items, emptyItem()] })
+                }
+              >
+                <Plus size={15} /> 新增完整条目
+              </button>
+              <button
+                type="button"
+                className="text-button hierarchy-action library-action-button"
+                onClick={onOpenItemLibrary}
+              >
+                <BookOpen size={15} /> 从库中添加条目
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </section>

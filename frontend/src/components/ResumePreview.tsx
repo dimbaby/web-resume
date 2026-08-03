@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { makeResumeLayoutStyle, normalizeAppearance } from "../printLayout";
 import type { ResumeDocument, RichTextSpan, TextStyle } from "../types";
 
 function RichText({ spans }: { spans: RichTextSpan[] }) {
@@ -26,13 +27,12 @@ function styleClass(style?: TextStyle, fallback?: TextStyle) {
 
 export function ResumePreview({ document }: { document: ResumeDocument }) {
   const { profile } = document;
-  const appearance = document.appearance ?? {
-    template: "reference",
-    bullet_style: "triangle",
-  };
+  const appearance = normalizeAppearance(document.appearance);
   return (
     <article
-      className={`resume-content resume-template-${appearance.template} resume-bullet-${appearance.bullet_style}`}
+      className={`resume-content resume-template-${appearance.template} resume-bullet-${appearance.bullet_style} resume-density-${appearance.density.preset}`}
+      data-density-preset={appearance.density.preset}
+      style={makeResumeLayoutStyle(appearance, Boolean(profile.photo_url))}
       aria-label={`${document.title} 预览`}
     >
       <header className={`resume-header${profile.photo_url ? " has-photo" : ""}`}>
