@@ -1,5 +1,5 @@
-import { BookOpen, Plus, Search, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { BookOpen, Files, Plus, Search, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { bulletFingerprint, itemFingerprint } from "../contentLibrary";
 import type {
   LibraryEntry,
@@ -13,9 +13,13 @@ export type ContentLibraryTarget =
   | { mode: "item"; sectionId: string }
   | { mode: "bullet"; sectionId: string; itemId: string };
 
+export type ContentSourceMode = "library" | "versions";
+
 type Props = {
   document: ResumeDocument;
   entries: LibraryEntry[];
+  versions?: ResumeDocument[];
+  initialSource?: ContentSourceMode;
   target: ContentLibraryTarget;
   loading: boolean;
   error: string;
@@ -55,6 +59,8 @@ function entrySearchText(entry: LibraryEntry) {
 export function ContentLibraryDialog({
   document,
   entries,
+  versions = [],
+  initialSource = "library",
   target,
   loading,
   error,
@@ -71,17 +77,56 @@ export function ContentLibraryDialog({
       : undefined;
   const initialKind =
     targetSection?.kind && targetSection.kind !== "custom" ? targetSection.kind : "all";
+  const availableVersions = useMemo(
+    () => versions.filter((version) => version.id !== document.id),
+    [document.id, versions],
+  );
+  const versionEntries = useMemo(
+    () =>
+      availableVersions.flatMap((version) =>
+        version.sections.flatMap((section) =>
+          section.items.map((item) => ({
+            id: `version-${version.id}-${section.id}-${item.id}`,
+            section_kind: section.kind,
+            section_title: section.title,
+            item,
+            source_resume_id: version.id,
+            source_resume_title: version.title,
+            source_filename: version.source.filename,
+            created_at: version.created_at,
+            updated_at: version.updated_at,
+          })),
+        ),
+      ),
+    [availableVersions],
+  );
+  const [sourceMode, setSourceMode] = useState<ContentSourceMode>(initialSource);
+  const [selectedVersionId, setSelectedVersionId] = useState(
+    availableVersions[0]?.id ?? "",
+  );
   const [kind, setKind] = useState<SectionKind | "all">(initialKind);
   const [query, setQuery] = useState("");
   const normalizedQuery = query.trim().toLocaleLowerCase();
+  useEffect(() => {
+    if (
+      !selectedVersionId ||
+      !availableVersions.some((version) => version.id === selectedVersionId)
+    ) {
+      setSelectedVersionId(availableVersions[0]?.id ?? "");
+    }
+  }, [availableVersions, selectedVersionId]);
+  const sourceEntries =
+    sourceMode === "library"
+      ? entries
+      : versionEntries.filter((entry) => entry.source_resume_id === selectedVersionId);
   const filteredEntries = useMemo(
     () =>
-      entries.filter((entry) => {
+      sourceEntries.filter((entry) => {
         if (kind !== "all" && entry.section_kind !== kind) return false;
         if (target.mode === "bullet" && entry.item.bullets.length === 0) return false;
         return !normalizedQuery || entrySearchText(entry).includes(normalizedQuery);
       }),
-    [entries, kind, normalizedQuery, target.mode],
+    [kind, normalizedQuery, sourceEntries, target.mode],
   );
 
   const destination =
@@ -95,34 +140,79 @@ export function ContentLibraryDialog({
         className="content-library-dialog"
         role="dialog"
         aria-modal="true"
-        aria-label="个人内容库"
+        aria-label="内容选择"
       >
         <header className="content-library-header">
           <div className="content-library-title">
             <span className="content-library-icon">
-              <BookOpen size={19} />
+              {sourceMode === "library" ? <BookOpen size={19} /> : <Files size={19} />}
             </span>
             <div>
-              <span className="eyebrow">PERSONAL CONTENT LIBRARY</span>
-              <h2>个人内容库</h2>
+              <span className="eyebrow">REUSABLE RESUME CONTENT</span>
+              <h2>{sourceMode === "library" ? "个人内容库" : "其他简历版本"}</h2>
               <p>
                 {target.mode === "item" ? "添加完整条目到" : "补充历史要点到"}
                 <strong>「{destination}」</strong>
               </p>
             </div>
           </div>
-          <button type="button" className="icon-button subtle" aria-label="关闭个人内容库" onClick={onClose}>
+          <button type="button" className="icon-button subtle" aria-label="关闭内容选择" onClick={onClose}>
             <X size={19} />
           </button>
         </header>
 
-        <div className="content-library-toolbar">
+        <div className="content-source-tabs" role="group" aria-label="选择内容来源">
+          <button
+            type="button"
+            className={sourceMode === "library" ? "selected" : ""}
+            aria-pressed={sourceMode === "library"}
+            onClick={() => setSourceMode("library")}
+          >
+            <BookOpen size={14} /> 个人内容库
+          </button>
+          <button
+            type="button"
+            className={sourceMode === "versions" ? "selected" : ""}
+            aria-pressed={sourceMode === "versions"}
+            onClick={() => setSourceMode("versions")}
+          >
+            <Files size={14} /> 其他简历版本
+          </button>
+        </div>
+
+        <div
+          className={
+            sourceMode === "versions"
+              ? "content-library-toolbar with-version-filter"
+              : "content-library-toolbar"
+          }
+        >
+          {sourceMode === "versions" && (
+            <select
+              value={selectedVersionId}
+              aria-label="选择简历版本"
+              onChange={(event) => setSelectedVersionId(event.target.value)}
+            >
+              {availableVersions.length === 0 && <option value="">暂无其他版本</option>}
+              {availableVersions.map((version) => (
+                <option key={version.id} value={version.id}>
+                  {version.title}
+                </option>
+              ))}
+            </select>
+          )}
           <label className="library-search-field">
             <Search size={15} />
             <input
               value={query}
-              aria-label="搜索个人内容库"
-              placeholder="搜索项目、单位、时间、关键词或来源文件"
+              aria-label={
+                sourceMode === "library" ? "搜索个人内容库" : "搜索其他简历版本"
+              }
+              placeholder={
+                sourceMode === "library"
+                  ? "搜索项目、单位、时间、关键词或来源文件"
+                  : "搜索所选版本中的项目、单位、时间或关键词"
+              }
               onChange={(event) => setQuery(event.target.value)}
             />
           </label>
@@ -141,7 +231,11 @@ export function ContentLibraryDialog({
 
         <div className="content-library-status-row">
           <span>{loading ? "正在读取…" : `${filteredEntries.length} 个可用条目`}</span>
-          <span>内容库独立保存，当前版本删除内容不会影响这里。</span>
+          <span>
+            {sourceMode === "library"
+              ? "内容库独立保存，当前版本删除内容不会影响这里。"
+              : "从其他版本复制后生成独立内容，后续修改互不影响。"}
+          </span>
         </div>
 
         {error && (
@@ -155,12 +249,24 @@ export function ContentLibraryDialog({
         {notice && <div className="content-library-notice">{notice}</div>}
 
         <div className="content-library-list">
+          {!loading &&
+            !error &&
+            sourceMode === "versions" &&
+            availableVersions.length === 0 && (
+              <div className="content-library-empty">
+                <Files size={24} />
+                <strong>没有其他简历版本</strong>
+                <span>可以先在版本库复制一份简历，再从版本间选择内容。</span>
+              </div>
+            )}
           {!loading && !error && filteredEntries.length === 0 && (
-            <div className="content-library-empty">
-              <BookOpen size={24} />
-              <strong>没有符合条件的内容</strong>
-              <span>可以清除搜索、切换模块，或先导入一份完整简历。</span>
-            </div>
+            sourceMode !== "versions" || availableVersions.length > 0 ? (
+              <div className="content-library-empty">
+                <BookOpen size={24} />
+                <strong>没有符合条件的内容</strong>
+                <span>可以清除搜索、切换模块，或选择其他简历版本。</span>
+              </div>
+            ) : null
           )}
           {filteredEntries.map((entry) => {
             const title = plain(entry.item.title).trim() || "未命名条目";

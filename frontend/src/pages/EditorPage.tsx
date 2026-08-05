@@ -14,6 +14,7 @@ import { ApiError, api, type RevisionedResumeDocument } from "../api";
 import { appendLibraryBullet, appendLibraryItem } from "../contentLibrary";
 import {
   ContentLibraryDialog,
+  type ContentSourceMode,
   type ContentLibraryTarget,
 } from "../components/ContentLibraryDialog";
 import { NameDialog } from "../components/NameDialog";
@@ -189,6 +190,9 @@ export function EditorPage() {
   const [copyDialogOpen, setCopyDialogOpen] = useState(false);
   const [libraryTarget, setLibraryTarget] = useState<ContentLibraryTarget | null>(null);
   const [libraryEntries, setLibraryEntries] = useState<LibraryEntry[]>([]);
+  const [resumeVersions, setResumeVersions] = useState<RevisionedResumeDocument[]>([]);
+  const [contentSourceMode, setContentSourceMode] =
+    useState<ContentSourceMode>("library");
   const [libraryLoading, setLibraryLoading] = useState(false);
   const [libraryError, setLibraryError] = useState("");
   const [libraryNotice, setLibraryNotice] = useState("");
@@ -346,16 +350,28 @@ export function EditorPage() {
     }
   }
 
-  async function openContentLibrary(target: ContentLibraryTarget) {
+  async function openContentLibrary(
+    target: ContentLibraryTarget,
+    sourceMode: ContentSourceMode = "library",
+  ) {
+    setContentSourceMode(sourceMode);
     setLibraryTarget(target);
     setLibraryNotice("");
     setLibraryError("");
+    setLibraryEntries([]);
+    setResumeVersions([]);
     setLibraryLoading(true);
     try {
       await flushSave();
-      setLibraryEntries(await api.library());
+      const [entries, summaries] = await Promise.all([api.library(), api.list()]);
+      const otherSummaries = summaries.filter((summary) => summary.id !== id);
+      const versions = await Promise.all(
+        otherSummaries.map((summary) => api.get(summary.id)),
+      );
+      setLibraryEntries(entries);
+      setResumeVersions(versions);
     } catch (reason) {
-      setLibraryError(operationMessage(reason, "读取个人内容库失败"));
+      setLibraryError(operationMessage(reason, "读取可选内容失败"));
     } finally {
       setLibraryLoading(false);
     }
@@ -679,6 +695,8 @@ export function EditorPage() {
         <ContentLibraryDialog
           document={document}
           entries={libraryEntries}
+          versions={resumeVersions}
+          initialSource={contentSourceMode}
           target={libraryTarget}
           loading={libraryLoading}
           error={libraryError}
@@ -687,7 +705,7 @@ export function EditorPage() {
             setLibraryTarget(null);
             setLibraryNotice("");
           }}
-          onRetry={() => void openContentLibrary(libraryTarget)}
+          onRetry={() => void openContentLibrary(libraryTarget, contentSourceMode)}
           onAddItem={addItemFromLibrary}
           onAddBullet={addBulletFromLibrary}
         />
@@ -965,11 +983,45 @@ export function EditorPage() {
                   />
                   <small>建议最后调整；优先压缩页边距和段落留白。</small>
                 </label>
+                <label className="density-slider font-size-slider">
+                  <span>
+                    条目标题字号
+                    <output>
+                      {appearance.density.item_title_font_size_pt.toFixed(1)} pt
+                    </output>
+                  </span>
+                  <input
+                    type="range"
+                    aria-label="条目标题字号"
+                    min={DENSITY_LIMITS.itemTitleFontSizePt.min}
+                    max={DENSITY_LIMITS.itemTitleFontSizePt.max}
+                    step={DENSITY_LIMITS.itemTitleFontSizePt.step}
+                    value={appearance.density.item_title_font_size_pt}
+                    style={densityRangeStyle(
+                      appearance.density.item_title_font_size_pt,
+                      DENSITY_LIMITS.itemTitleFontSizePt.min,
+                      DENSITY_LIMITS.itemTitleFontSizePt.max,
+                    )}
+                    onChange={(event) =>
+                      updateDensity({
+                        item_title_font_size_pt: Number(event.target.value),
+                      })
+                    }
+                  />
+                  <small>建议比正文字号大 1–2 pt，以保持条目与要点的层级。</small>
+                </label>
               </div>
               {(appearance.density.font_size_pt < 10 ||
                 appearance.density.line_height < 1.34) && (
                 <p className="density-caution" role="note">
                   当前属于密集排版，导出后请按 100% 比例检查打印可读性。
+                </p>
+              )}
+              {appearance.density.item_title_font_size_pt -
+                appearance.density.font_size_pt <
+                0.8 && (
+                <p className="density-caution" role="note">
+                  条目标题与正文字号过于接近，建议至少保留 0.8 pt 的层级差。
                 </p>
               )}
               <button
@@ -1030,6 +1082,22 @@ export function EditorPage() {
                     sectionId: section.id,
                     itemId,
                   })
+                }
+                onOpenItemVersions={() =>
+                  void openContentLibrary(
+                    { mode: "item", sectionId: section.id },
+                    "versions",
+                  )
+                }
+                onOpenBulletVersions={(itemId) =>
+                  void openContentLibrary(
+                    {
+                      mode: "bullet",
+                      sectionId: section.id,
+                      itemId,
+                    },
+                    "versions",
+                  )
                 }
               />
             )}

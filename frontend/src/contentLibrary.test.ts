@@ -47,6 +47,7 @@ function makeDocument(item: ResumeItem): ResumeDocument {
         page_margin_vertical_mm: 19,
         page_margin_horizontal_mm: 19,
         font_size_pt: 10.9,
+        item_title_font_size_pt: 12,
         line_height: 1.52,
         paragraph_spacing_percent: 100,
       },

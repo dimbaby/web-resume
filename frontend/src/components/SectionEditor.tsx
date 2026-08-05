@@ -1,5 +1,13 @@
 import { useState, type ReactNode } from "react";
-import { BookOpen, ChevronDown, Plus, Trash2 } from "lucide-react";
+import {
+  BookOpen,
+  ChevronDown,
+  ChevronsDown,
+  ChevronsUp,
+  Files,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import type { ResumeBullet, ResumeItem, ResumeSection, TextStyle } from "../types";
 import { plain, rich, styleRichText, uid } from "../utils";
 import { SortableList } from "./SortableList";
@@ -13,6 +21,8 @@ type Props = {
   onDeleteBullet: (itemId: string, bulletId: string) => void;
   onOpenItemLibrary: () => void;
   onOpenBulletLibrary: (itemId: string) => void;
+  onOpenItemVersions: () => void;
+  onOpenBulletVersions: (itemId: string) => void;
 };
 
 function emptyItem(): ResumeItem {
@@ -40,6 +50,8 @@ export function SectionEditor({
   onDeleteBullet,
   onOpenItemLibrary,
   onOpenBulletLibrary,
+  onOpenItemVersions,
+  onOpenBulletVersions,
 }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [collapsedItemIds, setCollapsedItemIds] = useState<Set<string>>(
@@ -53,6 +65,24 @@ export function SectionEditor({
         next.delete(itemId);
       } else {
         next.add(itemId);
+      }
+      return next;
+    });
+  }
+
+  const allItemsCollapsed =
+    section.items.length > 0 &&
+    section.items.every((item) => collapsedItemIds.has(item.id));
+
+  function toggleAllItemsCollapsed() {
+    setCollapsedItemIds((current) => {
+      const next = new Set(current);
+      for (const item of section.items) {
+        if (allItemsCollapsed) {
+          next.delete(item.id);
+        } else {
+          next.add(item.id);
+        }
       }
       return next;
     });
@@ -256,6 +286,13 @@ export function SectionEditor({
                 >
                   <BookOpen size={14} /> 从库中选择要点
                 </button>
+                <button
+                  type="button"
+                  className="text-button compact hierarchy-action version-action-button"
+                  onClick={() => onOpenBulletVersions(item.id)}
+                >
+                  <Files size={14} /> 从其他版本选择要点
+                </button>
               </div>
             </section>
           </>
@@ -294,6 +331,22 @@ export function SectionEditor({
       </div>
       {expanded && (
         <div className="section-editor-body">
+          <div className="item-list-toolbar">
+            <span>{section.items.length} 个完整条目</span>
+            <button
+              type="button"
+              className="text-button compact item-collapse-all"
+              disabled={section.items.length === 0}
+              onClick={toggleAllItemsCollapsed}
+            >
+              {allItemsCollapsed ? (
+                <ChevronsDown size={14} />
+              ) : (
+                <ChevronsUp size={14} />
+              )}
+              {allItemsCollapsed ? "一键展开全部" : "一键折叠全部"}
+            </button>
+          </div>
           <SortableList
             items={section.items}
             className="item-list-editor"
@@ -324,6 +377,13 @@ export function SectionEditor({
                 onClick={onOpenItemLibrary}
               >
                 <BookOpen size={15} /> 从库中添加条目
+              </button>
+              <button
+                type="button"
+                className="text-button hierarchy-action version-action-button"
+                onClick={onOpenItemVersions}
+              >
+                <Files size={15} /> 从其他版本选择条目
               </button>
             </div>
           </div>

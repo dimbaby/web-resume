@@ -9,6 +9,7 @@ import type {
 
 type TemplateMetrics = {
   fontSizePt: number;
+  itemTitleFontSizePt: number;
   lineHeight: number;
   headerMinMm: number;
   nameBottomMm: number;
@@ -24,6 +25,7 @@ type TemplateMetrics = {
 const TEMPLATE_METRICS: Record<TemplateStyle, TemplateMetrics> = {
   reference: {
     fontSizePt: 10.9,
+    itemTitleFontSizePt: 12,
     lineHeight: 1.52,
     headerMinMm: 34,
     nameBottomMm: 7,
@@ -37,6 +39,7 @@ const TEMPLATE_METRICS: Record<TemplateStyle, TemplateMetrics> = {
   },
   ats: {
     fontSizePt: 10.4,
+    itemTitleFontSizePt: 12,
     lineHeight: 1.45,
     headerMinMm: 34,
     nameBottomMm: 7,
@@ -50,6 +53,7 @@ const TEMPLATE_METRICS: Record<TemplateStyle, TemplateMetrics> = {
   },
   modern: {
     fontSizePt: 10.9,
+    itemTitleFontSizePt: 12,
     lineHeight: 1.52,
     headerMinMm: 34,
     nameBottomMm: 7,
@@ -63,6 +67,7 @@ const TEMPLATE_METRICS: Record<TemplateStyle, TemplateMetrics> = {
   },
   compact: {
     fontSizePt: 9.8,
+    itemTitleFontSizePt: 11.2,
     lineHeight: 1.38,
     headerMinMm: 29,
     nameBottomMm: 5,
@@ -76,6 +81,7 @@ const TEMPLATE_METRICS: Record<TemplateStyle, TemplateMetrics> = {
   },
   elegant: {
     fontSizePt: 10.6,
+    itemTitleFontSizePt: 12,
     lineHeight: 1.52,
     headerMinMm: 34,
     nameBottomMm: 7,
@@ -93,6 +99,7 @@ export const DENSITY_LIMITS = {
   pageMarginVerticalMm: { min: 13, max: 24, step: 1 },
   pageMarginHorizontalMm: { min: 13, max: 22, step: 1 },
   fontSizePt: { min: 9.5, max: 11.5, step: 0.1 },
+  itemTitleFontSizePt: { min: 10.2, max: 14, step: 0.1 },
   lineHeight: { min: 1.28, max: 1.6, step: 0.02 },
   paragraphSpacingPercent: { min: 60, max: 120, step: 5 },
 } as const;
@@ -132,25 +139,36 @@ export function makeDensityPreset(
       page_margin_vertical_mm: 19,
       page_margin_horizontal_mm: 19,
       font_size_pt: base.fontSizePt,
+      item_title_font_size_pt: base.itemTitleFontSizePt,
       line_height: base.lineHeight,
       paragraph_spacing_percent: 100,
     };
   }
   if (preset === "compact") {
+    const fontSize = Math.max(9.8, round(base.fontSizePt - 0.5, 1));
     return {
       preset,
       page_margin_vertical_mm: 16,
       page_margin_horizontal_mm: 16,
-      font_size_pt: Math.max(9.8, round(base.fontSizePt - 0.5, 1)),
+      font_size_pt: fontSize,
+      item_title_font_size_pt: Math.max(
+        round(fontSize + 1.2, 1),
+        round(base.itemTitleFontSizePt - 0.5, 1),
+      ),
       line_height: Math.max(1.34, round(base.lineHeight - 0.12, 2)),
       paragraph_spacing_percent: 78,
     };
   }
+  const fontSize = Math.max(9.5, round(base.fontSizePt - 1.1, 1));
   return {
     preset,
     page_margin_vertical_mm: 13,
     page_margin_horizontal_mm: 14,
-    font_size_pt: Math.max(9.5, round(base.fontSizePt - 1.1, 1)),
+    font_size_pt: fontSize,
+    item_title_font_size_pt: Math.max(
+      round(fontSize + 1.2, 1),
+      round(base.itemTitleFontSizePt - 0.9, 1),
+    ),
     line_height: Math.max(1.28, round(base.lineHeight - 0.22, 2)),
     paragraph_spacing_percent: 60,
   };
@@ -210,6 +228,17 @@ export function normalizeAppearance(
         ),
         1,
       ),
+      item_title_font_size_pt: round(
+        clamp(
+          finiteOr(
+            rawDensity?.item_title_font_size_pt,
+            fallback.item_title_font_size_pt,
+          ),
+          DENSITY_LIMITS.itemTitleFontSizePt.min,
+          DENSITY_LIMITS.itemTitleFontSizePt.max,
+        ),
+        1,
+      ),
       line_height: round(
         clamp(
           finiteOr(rawDensity?.line_height, fallback.line_height),
@@ -250,6 +279,7 @@ export function makeResumeLayoutStyle(
 
   return {
     "--resume-font-size": `${density.font_size_pt}pt`,
+    "--resume-item-title-font-size": `${density.item_title_font_size_pt}pt`,
     "--resume-line-height": `${density.line_height}`,
     "--resume-item-line-height": `${Math.max(1.25, Math.min(1.4, density.line_height))}`,
     "--resume-header-min-height": millimetres(headerMin),

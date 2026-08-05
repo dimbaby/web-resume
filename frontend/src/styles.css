@@ -836,7 +836,35 @@ textarea {
 
 .item-list-editor {
   gap: 12px;
-  padding: 12px 12px 0;
+  padding: 0 12px;
+}
+
+.item-list-toolbar {
+  align-items: center;
+  color: #7a8982;
+  display: flex;
+  font-size: 10px;
+  justify-content: space-between;
+  padding: 10px 12px 8px;
+}
+
+.item-collapse-all {
+  background: #f5f8f6;
+  border: 1px solid #d6e0db;
+  border-radius: 7px;
+  color: #4d6c5e;
+  gap: 5px;
+  padding: 5px 8px;
+}
+
+.item-collapse-all:hover:not(:disabled) {
+  background: #eaf2ee;
+  border-color: #bfd1c8;
+}
+
+.item-collapse-all:disabled {
+  cursor: default;
+  opacity: 0.48;
 }
 
 .item-editor {
@@ -1368,6 +1396,32 @@ textarea {
   padding: 20px 22px 17px;
 }
 
+.content-source-tabs {
+  background: white;
+  border-bottom: 1px solid #e0e7e3;
+  display: flex;
+  gap: 7px;
+  padding: 10px 22px 0;
+}
+
+.content-source-tabs button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: #718078;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 750;
+  gap: 6px;
+  padding: 7px 9px 9px;
+}
+
+.content-source-tabs button.selected {
+  border-bottom-color: #4c806b;
+  color: #315f4c;
+}
+
 .content-library-title {
   align-items: flex-start;
   display: flex;
@@ -1411,6 +1465,10 @@ textarea {
   padding: 12px 22px;
 }
 
+.content-library-toolbar.with-version-filter {
+  grid-template-columns: 210px minmax(0, 1fr) 170px;
+}
+
 .library-search-field {
   align-items: center;
   background: #f8faf9;
@@ -1439,6 +1497,16 @@ textarea {
 .content-library-toolbar select {
   padding: 9px;
   width: 100%;
+}
+
+.version-action-button {
+  border-color: #ccd6e2;
+  color: #4f6278;
+}
+
+.version-action-button:hover {
+  background: #f2f5f9;
+  border-color: #aebdd0;
 }
 
 .content-library-status-row {

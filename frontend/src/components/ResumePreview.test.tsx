@@ -21,6 +21,7 @@ const document: ResumeDocument = {
       page_margin_vertical_mm: 19,
       page_margin_horizontal_mm: 19,
       font_size_pt: 10.9,
+      item_title_font_size_pt: 12,
       line_height: 1.52,
       paragraph_spacing_percent: 100,
     },
@@ -97,6 +98,7 @@ describe("ResumePreview", () => {
               page_margin_vertical_mm: 13,
               page_margin_horizontal_mm: 14,
               font_size_pt: 9.8,
+              item_title_font_size_pt: 11.1,
               line_height: 1.3,
               paragraph_spacing_percent: 60,
             },
@@ -109,5 +111,38 @@ describe("ResumePreview", () => {
     expect(article?.style.getPropertyValue("--resume-font-size")).toBe("9.8pt");
     expect(article?.style.getPropertyValue("--resume-line-height")).toBe("1.3");
     expect(article?.style.getPropertyValue("--resume-section-gap")).toBe("1.38mm");
+  });
+
+  it("keeps CJK glyphs upright inside an italic mixed-language subtitle", () => {
+    const { container } = render(
+      <ResumePreview
+        document={{
+          ...document,
+          sections: [
+            {
+              ...document.sections[0],
+              items: [
+                {
+                  ...document.sections[0].items[0],
+                  subtitle: [
+                    { text: "京东物流 ｜ Submitted to AAAI 2027", italic: true },
+                  ],
+                },
+              ],
+            },
+          ],
+        }}
+      />,
+    );
+
+    const subtitle = container.querySelector(".resume-item-subtitle");
+    const uprightText = [...container.querySelectorAll(".resume-cjk-text")]
+      .map((element) => element.textContent)
+      .join("");
+
+    expect(subtitle).toHaveClass("resume-text-italic");
+    expect(uprightText).toContain("京东物流");
+    expect(uprightText).toContain("｜");
+    expect(subtitle).toHaveTextContent("京东物流 ｜ Submitted to AAAI 2027");
   });
 });

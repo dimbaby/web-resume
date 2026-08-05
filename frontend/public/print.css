@@ -15,6 +15,12 @@
   white-space: pre-wrap;
 }
 
+/* Most Chinese system fonts do not provide a real italic face. Keep CJK glyphs
+   upright instead of letting the browser synthesize a distorted slant. */
+.resume-cjk-text {
+  font-style: normal;
+}
+
 .resume-header {
   min-height: var(--resume-header-min-height, 34mm);
   position: relative;
@@ -137,7 +143,7 @@
 }
 
 .resume-template-compact .resume-item-header {
-  font-size: 11.2pt;
+  font-size: var(--resume-item-title-font-size, 11.2pt);
 }
 
 .resume-template-elegant {
@@ -174,7 +180,7 @@
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: baseline;
   column-gap: 6mm;
-  font-size: 12pt;
+  font-size: var(--resume-item-title-font-size, 12pt);
   line-height: var(--resume-item-line-height, 1.4);
 }
 

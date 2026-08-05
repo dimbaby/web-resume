@@ -551,13 +551,16 @@ def parse_markdown(data: bytes) -> ParsedResume:
         is_emphasis_line = line.startswith(("**", "__"))
         is_italic_line = line.startswith(("*", "_")) and not is_emphasis_line
 
-        if date or is_emphasis_line:
+        # A subtitle may legitimately end in a year, for example
+        # "Submitted to AAAI 2027". Once an item title exists, its first
+        # italic line is a subtitle even when the date parser finds that year.
+        if is_italic_line and current_item is not None and not current_item.subtitle:
+            current_item.subtitle = spans
+        elif date or is_emphasis_line:
             current_item = ResumeItem(
                 id=new_id(), title=title_spans, date=date, bullets=[]
             )
             current_section.items.append(current_item)
-        elif is_italic_line and current_item is not None:
-            current_item.subtitle = spans
         elif current_item is not None and not current_item.subtitle:
             current_item.subtitle = spans
         elif current_item is not None:

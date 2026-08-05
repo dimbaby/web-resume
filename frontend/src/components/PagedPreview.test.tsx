@@ -26,6 +26,7 @@ const resumeDocument: ResumeDocument = {
       page_margin_vertical_mm: 14,
       page_margin_horizontal_mm: 15,
       font_size_pt: 10.1,
+      item_title_font_size_pt: 11.8,
       line_height: 1.34,
       paragraph_spacing_percent: 70,
     },

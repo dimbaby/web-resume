@@ -33,6 +33,7 @@ const document: ResumeDocument = {
       page_margin_vertical_mm: 19,
       page_margin_horizontal_mm: 19,
       font_size_pt: 10.9,
+      item_title_font_size_pt: 12,
       line_height: 1.52,
       paragraph_spacing_percent: 100,
     },
@@ -168,7 +169,7 @@ describe("ContentLibraryDialog actions", () => {
     expect(props.onAddItem).toHaveBeenCalledOnce();
     expect(props.onAddItem).toHaveBeenCalledWith(technicalEntry);
 
-    fireEvent.click(screen.getByRole("button", { name: "关闭个人内容库" }));
+    fireEvent.click(screen.getByRole("button", { name: "关闭内容选择" }));
     fireEvent.click(screen.getByRole("button", { name: "重试" }));
     expect(props.onClose).toHaveBeenCalledOnce();
     expect(props.onRetry).toHaveBeenCalledOnce();
@@ -213,5 +214,49 @@ describe("ContentLibraryDialog actions", () => {
     fireEvent.click(addButton as HTMLButtonElement);
     expect(onAddBullet).toHaveBeenCalledOnce();
     expect(onAddBullet).toHaveBeenCalledWith(entry, entry.item.bullets[1]);
+  });
+
+  it("browses a selected resume version separately from the personal library", () => {
+    const versionItem = makeItem("version-item", "版本专属项目", [
+      { id: "version-bullet", text: "来自另一份简历的要点" },
+    ]);
+    const versionDocument: ResumeDocument = {
+      ...document,
+      id: "resume-2",
+      title: "算法岗位版",
+      source: { filename: "algorithm.md", format: "md" },
+      sections: [
+        {
+          id: "version-projects",
+          kind: "project",
+          title: "项目经历",
+          items: [versionItem],
+        },
+      ],
+    };
+    const props = renderItemDialog([technicalEntry], {
+      versions: [versionDocument],
+      initialSource: "versions",
+    });
+
+    expect(screen.getByRole("heading", { name: "其他简历版本" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "选择简历版本" })).toHaveValue(
+      "resume-2",
+    );
+    expect(screen.getByRole("heading", { name: "版本专属项目" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "C++ 引擎" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "添加条目：版本专属项目" }));
+    expect(props.onAddItem).toHaveBeenCalledOnce();
+    expect(props.onAddItem).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source_resume_id: "resume-2",
+        source_resume_title: "算法岗位版",
+        item: versionItem,
+      }),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "个人内容库" }));
+    expect(screen.getByRole("heading", { name: "C++ 引擎" })).toBeInTheDocument();
   });
 });

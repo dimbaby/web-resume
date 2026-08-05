@@ -34,6 +34,8 @@ describe("SectionEditor", () => {
         onDeleteBullet={vi.fn()}
         onOpenItemLibrary={vi.fn()}
         onOpenBulletLibrary={vi.fn()}
+        onOpenItemVersions={vi.fn()}
+        onOpenBulletVersions={vi.fn()}
       />,
     );
 
@@ -47,6 +49,8 @@ describe("SectionEditor", () => {
   it("opens the library for a whole item or for bullets in the selected item", () => {
     const onOpenItemLibrary = vi.fn();
     const onOpenBulletLibrary = vi.fn();
+    const onOpenItemVersions = vi.fn();
+    const onOpenBulletVersions = vi.fn();
     render(
       <SectionEditor
         section={section}
@@ -57,16 +61,22 @@ describe("SectionEditor", () => {
         onDeleteBullet={vi.fn()}
         onOpenItemLibrary={onOpenItemLibrary}
         onOpenBulletLibrary={onOpenBulletLibrary}
+        onOpenItemVersions={onOpenItemVersions}
+        onOpenBulletVersions={onOpenBulletVersions}
       />,
     );
 
     fireEvent.click(screen.getByRole("button", { name: "展开模块" }));
     fireEvent.click(screen.getByRole("button", { name: "从库中添加条目" }));
     fireEvent.click(screen.getByRole("button", { name: "从库中选择要点" }));
+    fireEvent.click(screen.getByRole("button", { name: "从其他版本选择条目" }));
+    fireEvent.click(screen.getByRole("button", { name: "从其他版本选择要点" }));
 
     expect(onOpenItemLibrary).toHaveBeenCalledOnce();
     expect(onOpenBulletLibrary).toHaveBeenCalledOnce();
     expect(onOpenBulletLibrary).toHaveBeenCalledWith("school");
+    expect(onOpenItemVersions).toHaveBeenCalledOnce();
+    expect(onOpenBulletVersions).toHaveBeenCalledWith("school");
   });
 
   it("collapses an item into a compact row without changing resume data", () => {
@@ -81,6 +91,8 @@ describe("SectionEditor", () => {
         onDeleteBullet={vi.fn()}
         onOpenItemLibrary={vi.fn()}
         onOpenBulletLibrary={vi.fn()}
+        onOpenItemVersions={vi.fn()}
+        onOpenBulletVersions={vi.fn()}
       />,
     );
 
@@ -101,5 +113,37 @@ describe("SectionEditor", () => {
       screen.getByRole("button", { name: "展开条目：示例大学" }),
     );
     expect(screen.getByDisplayValue("示例大学")).toBeInTheDocument();
+  });
+
+  it("collapses and expands all items in a section with one action", () => {
+    render(
+      <SectionEditor
+        section={section}
+        handle={<span>handle</span>}
+        onChange={vi.fn()}
+        onDeleteSection={vi.fn()}
+        onDeleteItem={vi.fn()}
+        onDeleteBullet={vi.fn()}
+        onOpenItemLibrary={vi.fn()}
+        onOpenBulletLibrary={vi.fn()}
+        onOpenItemVersions={vi.fn()}
+        onOpenBulletVersions={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "展开模块" }));
+    fireEvent.click(screen.getByRole("button", { name: "一键折叠全部" }));
+
+    expect(screen.queryByDisplayValue("示例大学")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "展开条目：示例大学" }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "一键展开全部" }));
+
+    expect(screen.getByDisplayValue("示例大学")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "折叠条目：示例大学" }),
+    ).toBeInTheDocument();
   });
 });

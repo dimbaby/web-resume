@@ -177,6 +177,29 @@ def test_markdown_preserves_contact_remainder_and_supports_ordered_lists() -> No
     assert "上海" in unresolved_text
 
 
+def test_markdown_keeps_year_ending_italic_line_as_item_subtitle() -> None:
+    parsed = parse_markdown(
+        """# 林然
+## 项目经历
+**DEC-Graph RAG：多跳问答图检索与差异化证据压缩** 2026.04-2026.08
+*京东物流 ｜ Submitted to AAAI 2027*
+- 完成多跳问答图检索
+- 实现差异化证据压缩
+""".encode("utf-8")
+    )
+
+    project = next(section for section in parsed.sections if section.kind == "project")
+
+    assert len(project.items) == 1
+    assert plain(project.items[0].title) == "DEC-Graph RAG：多跳问答图检索与差异化证据压缩"
+    assert project.items[0].date == "2026.04-2026.08"
+    assert plain(project.items[0].subtitle) == "京东物流 ｜ Submitted to AAAI 2027"
+    assert [plain(bullet.content) for bullet in project.items[0].bullets] == [
+        "完成多跳问答图检索",
+        "实现差异化证据压缩",
+    ]
+
+
 def test_split_title_date_preserves_title_span_formatting() -> None:
     spans = [
         RichTextSpan(text="API", bold=True),

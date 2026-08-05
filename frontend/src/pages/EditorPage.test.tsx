@@ -12,6 +12,7 @@ const apiMock = vi.hoisted(() => ({
   photo: vi.fn(),
   exportPdf: vi.fn(),
   library: vi.fn(),
+  list: vi.fn(),
 }));
 
 vi.mock("../api", () => {
@@ -43,16 +44,24 @@ vi.mock("../components/SectionEditor", () => ({
     onDeleteItem,
     onOpenItemLibrary,
     onOpenBulletLibrary,
+    onOpenItemVersions,
+    onOpenBulletVersions,
   }: any) => (
     <div>
       <button type="button" onClick={onOpenItemLibrary}>
         打开条目内容库
+      </button>
+      <button type="button" onClick={onOpenItemVersions}>
+        打开其他版本条目
       </button>
       {section.items.map((item: any) => (
         <div key={item.id}>
           <span>{item.title[0]?.text}</span>
           <button type="button" onClick={() => onOpenBulletLibrary(item.id)}>
             打开要点内容库
+          </button>
+          <button type="button" onClick={() => onOpenBulletVersions(item.id)}>
+            打开其他版本要点
           </button>
           <button type="button" onClick={() => onDeleteItem(item.id)}>
             删除测试条目
@@ -81,6 +90,7 @@ const baseDocument: ResumeDocument = {
       page_margin_vertical_mm: 19,
       page_margin_horizontal_mm: 19,
       font_size_pt: 10.9,
+      item_title_font_size_pt: 12,
       line_height: 1.52,
       paragraph_spacing_percent: 100,
     },
@@ -181,6 +191,7 @@ describe("EditorPage reliability", () => {
     apiMock.photo.mockReset();
     apiMock.exportPdf.mockReset();
     apiMock.library.mockReset().mockResolvedValue([structuredClone(libraryEntry)]);
+    apiMock.list.mockReset().mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -379,6 +390,7 @@ describe("EditorPage reliability", () => {
             page_margin_vertical_mm: 13,
             page_margin_horizontal_mm: 14,
             font_size_pt: 9.8,
+            item_title_font_size_pt: 11.1,
             line_height: 1.3,
             paragraph_spacing_percent: 60,
           },
@@ -398,6 +410,9 @@ describe("EditorPage reliability", () => {
     fireEvent.change(screen.getByRole("slider", { name: "正文字号" }), {
       target: { value: "10.2" },
     });
+    fireEvent.change(screen.getByRole("slider", { name: "条目标题字号" }), {
+      target: { value: "12.6" },
+    });
     expect(screen.getByText("自定义")).toBeInTheDocument();
     await act(() => vi.advanceTimersByTimeAsync(750));
 
@@ -406,6 +421,7 @@ describe("EditorPage reliability", () => {
       preset: "custom",
       page_margin_horizontal_mm: 15,
       font_size_pt: 10.2,
+      item_title_font_size_pt: 12.6,
     });
   });
 
@@ -454,6 +470,62 @@ describe("EditorPage reliability", () => {
     const savedBullet = apiMock.save.mock.calls[0][0].sections[0].items[0].bullets[0];
     expect(savedBullet.content).toEqual(libraryEntry.item.bullets[0].content);
     expect(savedBullet.id).not.toBe(libraryEntry.item.bullets[0].id);
+  });
+
+  it("copies an item directly from another resume version", async () => {
+    vi.useFakeTimers();
+    const otherVersion: ResumeDocument = {
+      ...cloneDocument(),
+      id: "resume-2",
+      title: "算法岗位版",
+      sections: [
+        {
+          id: "other-projects",
+          kind: "project",
+          title: "项目经历",
+          items: [
+            {
+              ...structuredClone(libraryEntry.item),
+              id: "version-item",
+              title: [{ text: "跨版本项目" }],
+            },
+          ],
+        },
+      ],
+    };
+    apiMock.list.mockResolvedValue([
+      {
+        id: "resume-2",
+        revision: 1,
+        title: "算法岗位版",
+        source_filename: "algorithm.md",
+        section_count: 1,
+        created_at: otherVersion.created_at,
+        updated_at: otherVersion.updated_at,
+      },
+    ]);
+    apiMock.get.mockImplementation(async (resumeId: string) =>
+      structuredClone(resumeId === "resume-2" ? otherVersion : baseDocument),
+    );
+    renderEditor();
+    await act(async () => undefined);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "打开其他版本条目" }));
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(apiMock.list).toHaveBeenCalledOnce();
+    expect(apiMock.get).toHaveBeenCalledWith("resume-2");
+    expect(screen.getByRole("heading", { name: "其他简历版本" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "添加条目：跨版本项目" }));
+    await act(() => vi.advanceTimersByTimeAsync(750));
+
+    const savedItems = apiMock.save.mock.calls[0][0].sections[0].items;
+    expect(savedItems[1].title).toEqual([{ text: "跨版本项目" }]);
+    expect(savedItems[1].id).not.toBe("version-item");
   });
 
   it("retries the pending save before reloading the content library", async () => {

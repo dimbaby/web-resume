@@ -57,6 +57,7 @@ export type ResumeDensity = {
   page_margin_vertical_mm: number;
   page_margin_horizontal_mm: number;
   font_size_pt: number;
+  item_title_font_size_pt: number;
   line_height: number;
   paragraph_spacing_percent: number;
 };

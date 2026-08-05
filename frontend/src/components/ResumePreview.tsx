@@ -2,9 +2,25 @@ import type { ReactNode } from "react";
 import { makeResumeLayoutStyle, normalizeAppearance } from "../printLayout";
 import type { ResumeDocument, RichTextSpan, TextStyle } from "../types";
 
+const CJK_SEGMENT_PATTERN =
+  /([\u2e80-\u2fff\u3000-\u303f\u3040-\u30ff\u31f0-\u31ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uff00-\uffef]+)/g;
+const CJK_CHARACTER_PATTERN =
+  /[\u2e80-\u2fff\u3000-\u303f\u3040-\u30ff\u31f0-\u31ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uff00-\uffef]/;
+
+function ScriptAwareText({ text }: { text: string }) {
+  return text.split(CJK_SEGMENT_PATTERN).filter(Boolean).map((part, index) => (
+    <span
+      className={CJK_CHARACTER_PATTERN.test(part) ? "resume-cjk-text" : undefined}
+      key={`${index}-${part}`}
+    >
+      {part}
+    </span>
+  ));
+}
+
 function RichText({ spans }: { spans: RichTextSpan[] }) {
   return spans.map((span, index) => {
-    let content: ReactNode = span.text;
+    let content: ReactNode = <ScriptAwareText text={span.text} />;
     if (span.bold) content = <strong>{content}</strong>;
     if (span.italic) content = <em>{content}</em>;
     return (
