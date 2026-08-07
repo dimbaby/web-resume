@@ -88,7 +88,9 @@ describe("ImportReviewPage", () => {
   it("edits and moves unresolved content before confirmation", async () => {
     renderPage();
     const textarea = await screen.findByRole("textbox", { name: "待确认内容" });
-    fireEvent.change(textarea, { target: { value: "已校正的项目说明" } });
+    fireEvent.change(textarea, {
+      target: { value: "已校正的 **项目说明**" },
+    });
     fireEvent.change(screen.getByRole("combobox", { name: "目标模块" }), {
       target: { value: "project" },
     });
@@ -99,9 +101,10 @@ describe("ImportReviewPage", () => {
     const saved = apiMock.save.mock.calls[0][0] as ResumeDocument;
     expect(saved.warnings).toEqual([]);
     expect(saved.sections.some((section) => section.kind === "unresolved")).toBe(false);
-    expect(saved.sections[0].items[0].bullets[0].content[0].text).toBe(
-      "已校正的项目说明",
-    );
+    expect(saved.sections[0].items[0].bullets[0].content).toEqual([
+      { text: "已校正的 ", bold: false, italic: false },
+      { text: "项目说明", bold: true, italic: false },
+    ]);
     expect(await screen.findByText("详细编辑页")).toBeInTheDocument();
   });
 

@@ -7,13 +7,17 @@ const CJK_SEGMENT_PATTERN =
 const CJK_CHARACTER_PATTERN =
   /[\u2e80-\u2fff\u3000-\u303f\u3040-\u30ff\u31f0-\u31ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uff00-\uffef]/;
 
+function preservePagedWhitespace(text: string) {
+  return text.replace(/ {2,}/g, (spaces) => ` ${"\u00a0".repeat(spaces.length - 1)}`);
+}
+
 function ScriptAwareText({ text }: { text: string }) {
   return text.split(CJK_SEGMENT_PATTERN).filter(Boolean).map((part, index) => (
     <span
       className={CJK_CHARACTER_PATTERN.test(part) ? "resume-cjk-text" : undefined}
       key={`${index}-${part}`}
     >
-      {part}
+      {preservePagedWhitespace(part)}
     </span>
   ));
 }

@@ -4,7 +4,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../api";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import type { ResumeDocument } from "../types";
-import { plain, rich } from "../utils";
+import { inlineMarkdownSource, parseInlineMarkdown } from "../utils";
 
 export function ImportReviewPage() {
   const { id = "" } = useParams();
@@ -67,7 +67,12 @@ export function ImportReviewPage() {
                         ? {
                             ...item,
                             bullets: item.bullets.length
-                              ? [{ ...item.bullets[0], content: rich(value) }]
+                              ? [
+                                  {
+                                    ...item.bullets[0],
+                                    content: parseInlineMarkdown(value),
+                                  },
+                                ]
                               : item.bullets,
                           }
                         : item,
@@ -269,7 +274,9 @@ export function ImportReviewPage() {
                   <textarea
                     rows={3}
                     aria-label="待确认内容"
-                    value={item.bullets.map((bullet) => plain(bullet.content)).join(" ")}
+                    value={item.bullets
+                      .map((bullet) => inlineMarkdownSource(bullet.content))
+                      .join(" ")}
                     onChange={(event) => updateUnresolvedItem(item.id, event.target.value)}
                   />
                   <div className="unresolved-review-actions">

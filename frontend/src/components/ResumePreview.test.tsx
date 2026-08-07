@@ -147,4 +147,34 @@ describe("ResumePreview", () => {
     expect(cjkText).toContain("｜");
     expect(subtitle).toHaveTextContent("京东物流 ｜ Submitted to AAAI 2027");
   });
+
+  it("uses non-breaking continuation spaces so Paged.js preserves spacing", () => {
+    const { container } = render(
+      <ResumePreview
+        document={{
+          ...document,
+          sections: [
+            {
+              ...document.sections[0],
+              items: [
+                {
+                  ...document.sections[0].items[0],
+                  bullets: [
+                    {
+                      id: "spacing",
+                      content: [{ text: "核心  模型   结果" }],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(container.querySelector(".resume-bullet")?.textContent).toContain(
+      "核心 \u00a0模型 \u00a0\u00a0结果",
+    );
+  });
 });

@@ -9,7 +9,13 @@ import {
   Trash2,
 } from "lucide-react";
 import type { ResumeBullet, ResumeItem, ResumeSection, TextStyle } from "../types";
-import { plain, rich, styleRichText, uid } from "../utils";
+import {
+  inlineMarkdownSource,
+  parseInlineMarkdown,
+  plain,
+  styleRichText,
+  uid,
+} from "../utils";
 import { SortableList } from "./SortableList";
 
 type Props = {
@@ -100,16 +106,19 @@ export function SectionEditor({
       <div className="bullet-editor">
         {bulletHandle}
         <textarea
-          value={plain(bullet.content)}
+          value={inlineMarkdownSource(bullet.content)}
           rows={2}
           aria-label="描述要点"
-          placeholder="输入一条成果或职责"
+          placeholder="输入成果或职责，支持 **加粗** / *斜体*"
           onChange={(event) =>
             updateItem({
               ...item,
               bullets: item.bullets.map((value) =>
                 value.id === bullet.id
-                  ? { ...value, content: rich(event.target.value) }
+                  ? {
+                      ...value,
+                      content: parseInlineMarkdown(event.target.value),
+                    }
                   : value,
               ),
             })
@@ -193,14 +202,14 @@ export function SectionEditor({
               <label>
                 名称
                 <textarea
-                  value={plain(item.title)}
+                  value={inlineMarkdownSource(item.title, titleStyle)}
                   rows={2}
                   placeholder="如：车险纯保费建模项目"
                   onChange={(event) =>
                     updateItem({
                       ...item,
                       title_style: titleStyle,
-                      title: rich(event.target.value, titleStyle),
+                      title: parseInlineMarkdown(event.target.value, titleStyle),
                     })
                   }
                 />
@@ -217,16 +226,19 @@ export function SectionEditor({
             <label>
               单位、角色或副标题
               <textarea
-                value={plain(item.subtitle)}
+                value={inlineMarkdownSource(item.subtitle, subtitleStyle)}
                 rows={2}
                 placeholder="如：广义线性模型课程报告"
                 onChange={(event) =>
-                  updateItem({
-                    ...item,
-                    subtitle_style: subtitleStyle,
-                    subtitle: rich(event.target.value, subtitleStyle),
-                  })
-                }
+                    updateItem({
+                      ...item,
+                      subtitle_style: subtitleStyle,
+                      subtitle: parseInlineMarkdown(
+                        event.target.value,
+                        subtitleStyle,
+                      ),
+                    })
+                  }
               />
             </label>
             <div className="format-control-row">
@@ -254,7 +266,7 @@ export function SectionEditor({
                   <span className="hierarchy-chip bullet-level-chip">要点层</span>
                   <strong>内容要点</strong>
                 </div>
-                <span>{item.bullets.length} 条 · 可拖动排序</span>
+                <span>{item.bullets.length} 条 · 支持 **加粗** / *斜体*</span>
               </div>
               {item.bullets.length === 0 && (
                 <p className="bullet-empty-state">

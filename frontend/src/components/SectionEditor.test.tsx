@@ -146,4 +146,71 @@ describe("SectionEditor", () => {
       screen.getByRole("button", { name: "折叠条目：示例大学" }),
     ).toBeInTheDocument();
   });
+
+  it("edits inline Markdown while preserving rich spans and technical symbols", () => {
+    const onChange = vi.fn();
+    const markdownSection: ResumeSection = {
+      ...section,
+      items: [
+        {
+          ...section.items[0],
+          bullets: [
+            {
+              id: "result",
+              content: [
+                { text: "完成 ", bold: false, italic: false },
+                { text: "核心模型", bold: true, italic: false },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    render(
+      <SectionEditor
+        section={markdownSection}
+        handle={<span>handle</span>}
+        onChange={onChange}
+        onDeleteSection={vi.fn()}
+        onDeleteItem={vi.fn()}
+        onDeleteBullet={vi.fn()}
+        onOpenItemLibrary={vi.fn()}
+        onOpenBulletLibrary={vi.fn()}
+        onOpenItemVersions={vi.fn()}
+        onOpenBulletVersions={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "展开模块" }));
+    const bulletEditor = screen.getByRole("textbox", { name: "描述要点" });
+    expect(bulletEditor).toHaveValue("完成 **核心模型**");
+
+    fireEvent.change(bulletEditor, {
+      target: { value: "完成 **核心  模型**、*验证*，保留 A* 与 x_y" },
+    });
+
+    expect(onChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        items: [
+          expect.objectContaining({
+            bullets: [
+              expect.objectContaining({
+                content: [
+                  { text: "完成 ", bold: false, italic: false },
+                  { text: "核心  模型", bold: true, italic: false },
+                  { text: "、", bold: false, italic: false },
+                  { text: "验证", bold: false, italic: true },
+                  {
+                    text: "，保留 A* 与 x_y",
+                    bold: false,
+                    italic: false,
+                  },
+                ],
+              }),
+            ],
+          }),
+        ],
+      }),
+    );
+  });
 });
