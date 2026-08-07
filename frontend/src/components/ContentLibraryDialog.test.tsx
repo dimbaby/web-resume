@@ -36,6 +36,7 @@ const document: ResumeDocument = {
       item_title_font_size_pt: 12,
       line_height: 1.52,
       paragraph_spacing_percent: 100,
+      name_contact_gap_mm: 7,
     },
   },
   sections: [
@@ -140,6 +141,10 @@ describe("ContentLibraryDialog search and filters", () => {
   it("defaults to the destination module and lets the user switch module filters", () => {
     renderItemDialog();
 
+    expect(screen.queryByRole("button", { name: "其他简历版本" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("combobox", { name: "选择简历版本" }),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "筛选内容库模块" })).toHaveValue("project");
     expect(screen.getByRole("heading", { name: "C++ 引擎" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "示例大学" })).not.toBeInTheDocument();
@@ -236,7 +241,7 @@ describe("ContentLibraryDialog actions", () => {
     };
     const props = renderItemDialog([technicalEntry], {
       versions: [versionDocument],
-      initialSource: "versions",
+      sourceMode: "versions",
     });
 
     expect(screen.getByRole("heading", { name: "其他简历版本" })).toBeInTheDocument();
@@ -256,7 +261,6 @@ describe("ContentLibraryDialog actions", () => {
       }),
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "个人内容库" }));
-    expect(screen.getByRole("heading", { name: "C++ 引擎" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "个人内容库" })).not.toBeInTheDocument();
   });
 });

@@ -102,6 +102,7 @@ export const DENSITY_LIMITS = {
   itemTitleFontSizePt: { min: 10.2, max: 14, step: 0.1 },
   lineHeight: { min: 1.28, max: 1.6, step: 0.02 },
   paragraphSpacingPercent: { min: 60, max: 120, step: 5 },
+  nameContactGapMm: { min: 2.5, max: 10, step: 0.5 },
 } as const;
 
 const TEMPLATE_STYLES: TemplateStyle[] = [
@@ -123,6 +124,10 @@ function round(value: number, digits: number) {
   return Math.round(value * factor) / factor;
 }
 
+function roundToStep(value: number, step: number) {
+  return round(Math.round(value / step) * step, 2);
+}
+
 function finiteOr(value: unknown, fallback: number) {
   const parsed = typeof value === "number" ? value : Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
@@ -142,6 +147,7 @@ export function makeDensityPreset(
       item_title_font_size_pt: base.itemTitleFontSizePt,
       line_height: base.lineHeight,
       paragraph_spacing_percent: 100,
+      name_contact_gap_mm: base.nameBottomMm,
     };
   }
   if (preset === "compact") {
@@ -157,6 +163,7 @@ export function makeDensityPreset(
       ),
       line_height: Math.max(1.34, round(base.lineHeight - 0.12, 2)),
       paragraph_spacing_percent: 78,
+      name_contact_gap_mm: Math.max(3.5, base.nameBottomMm - 2),
     };
   }
   const fontSize = Math.max(9.5, round(base.fontSizePt - 1.1, 1));
@@ -171,6 +178,7 @@ export function makeDensityPreset(
     ),
     line_height: Math.max(1.28, round(base.lineHeight - 0.22, 2)),
     paragraph_spacing_percent: 60,
+    name_contact_gap_mm: 2.5,
   };
 }
 
@@ -196,6 +204,23 @@ export function normalizeAppearance(
   const fallback = makeDensityPreset(
     template,
     preset === "custom" ? "standard" : preset,
+  );
+  const paragraphSpacingPercent = Math.round(
+    clamp(
+      finiteOr(
+        rawDensity?.paragraph_spacing_percent,
+        fallback.paragraph_spacing_percent,
+      ),
+      DENSITY_LIMITS.paragraphSpacingPercent.min,
+      DENSITY_LIMITS.paragraphSpacingPercent.max,
+    ),
+  );
+  const legacyNameContactGap = Math.max(
+    3,
+    roundToStep(
+      TEMPLATE_METRICS[template].nameBottomMm * (paragraphSpacingPercent / 100),
+      DENSITY_LIMITS.nameContactGapMm.step,
+    ),
   );
 
   return {
@@ -247,15 +272,14 @@ export function normalizeAppearance(
         ),
         2,
       ),
-      paragraph_spacing_percent: Math.round(
+      paragraph_spacing_percent: paragraphSpacingPercent,
+      name_contact_gap_mm: roundToStep(
         clamp(
-          finiteOr(
-            rawDensity?.paragraph_spacing_percent,
-            fallback.paragraph_spacing_percent,
-          ),
-          DENSITY_LIMITS.paragraphSpacingPercent.min,
-          DENSITY_LIMITS.paragraphSpacingPercent.max,
+          finiteOr(rawDensity?.name_contact_gap_mm, legacyNameContactGap),
+          DENSITY_LIMITS.nameContactGapMm.min,
+          DENSITY_LIMITS.nameContactGapMm.max,
         ),
+        DENSITY_LIMITS.nameContactGapMm.step,
       ),
     },
   };
@@ -275,7 +299,14 @@ export function makeResumeLayoutStyle(
   const density = normalized.density;
   const base = TEMPLATE_METRICS[normalized.template];
   const spacingScale = density.paragraph_spacing_percent / 100;
-  const headerMin = Math.max(hasPhoto ? 32.5 : 20, base.headerMinMm * spacingScale);
+  const headerContentMin = 14 + density.name_contact_gap_mm;
+  const photoWidth = round(18.75 + density.name_contact_gap_mm * 0.5, 2);
+  const photoHeight = round(photoWidth * 1.4, 2);
+  const photoTop = round(-(2.5 + density.name_contact_gap_mm * 0.2), 2);
+  const photoBottom = photoHeight + photoTop;
+  const headerMin = hasPhoto
+    ? Math.max(headerContentMin, photoBottom)
+    : Math.max(16, headerContentMin);
 
   return {
     "--resume-font-size": `${density.font_size_pt}pt`,
@@ -283,9 +314,11 @@ export function makeResumeLayoutStyle(
     "--resume-line-height": `${density.line_height}`,
     "--resume-item-line-height": `${Math.max(1.25, Math.min(1.4, density.line_height))}`,
     "--resume-header-min-height": millimetres(headerMin),
-    "--resume-name-bottom-gap": millimetres(
-      Math.max(3, base.nameBottomMm * spacingScale),
-    ),
+    "--resume-name-bottom-gap": millimetres(density.name_contact_gap_mm),
+    "--resume-photo-width": millimetres(photoWidth),
+    "--resume-photo-height": millimetres(photoHeight),
+    "--resume-photo-top": millimetres(photoTop),
+    "--resume-photo-padding-right": millimetres(photoWidth + 2),
     "--resume-section-gap": millimetres(base.sectionGapMm * spacingScale),
     "--resume-section-title-gap": millimetres(
       base.sectionTitleGapMm * spacingScale,

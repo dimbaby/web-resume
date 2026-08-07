@@ -1,4 +1,5 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { useEffect } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
 import { ApiError } from "../api";
@@ -29,7 +30,10 @@ vi.mock("../api", () => {
 });
 
 vi.mock("../components/PagedPreview", () => ({
-  PagedPreview: () => <div data-testid="preview" />,
+  PagedPreview: ({ onPageCount }: { onPageCount?: (count: number) => void }) => {
+    useEffect(() => onPageCount?.(1), [onPageCount]);
+    return <div data-testid="preview" />;
+  },
 }));
 
 vi.mock("../components/SortableList", () => ({
@@ -93,6 +97,7 @@ const baseDocument: ResumeDocument = {
       item_title_font_size_pt: 12,
       line_height: 1.52,
       paragraph_spacing_percent: 100,
+      name_contact_gap_mm: 7,
     },
   },
   sections: [
@@ -364,7 +369,8 @@ describe("EditorPage reliability", () => {
     renderEditor();
     await screen.findByDisplayValue("初始版本");
 
-    fireEvent.click(screen.getByRole("button", { name: "导出 PDF" }));
+    const exportButton = await screen.findByRole("button", { name: "导出 PDF" });
+    fireEvent.click(exportButton);
 
     expect(await screen.findByText("浏览器未能生成 PDF")).toBeInTheDocument();
     expect(screen.getByDisplayValue("初始版本")).toBeInTheDocument();
@@ -393,6 +399,7 @@ describe("EditorPage reliability", () => {
             item_title_font_size_pt: 11.1,
             line_height: 1.3,
             paragraph_spacing_percent: 60,
+            name_contact_gap_mm: 2.5,
           },
         }),
       }),
@@ -413,6 +420,10 @@ describe("EditorPage reliability", () => {
     fireEvent.change(screen.getByRole("slider", { name: "条目标题字号" }), {
       target: { value: "12.6" },
     });
+    fireEvent.change(
+      screen.getByRole("slider", { name: "姓名与联系方式间距" }),
+      { target: { value: "3.5" } },
+    );
     expect(screen.getByText("自定义")).toBeInTheDocument();
     await act(() => vi.advanceTimersByTimeAsync(750));
 
@@ -422,6 +433,7 @@ describe("EditorPage reliability", () => {
       page_margin_horizontal_mm: 15,
       font_size_pt: 10.2,
       item_title_font_size_pt: 12.6,
+      name_contact_gap_mm: 3.5,
     });
   });
 
@@ -437,6 +449,7 @@ describe("EditorPage reliability", () => {
     });
 
     expect(apiMock.library).toHaveBeenCalledOnce();
+    expect(apiMock.list).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "添加条目：历史风控项目" }));
     await act(() => vi.advanceTimersByTimeAsync(750));
 
@@ -518,6 +531,7 @@ describe("EditorPage reliability", () => {
     });
 
     expect(apiMock.list).toHaveBeenCalledOnce();
+    expect(apiMock.library).not.toHaveBeenCalled();
     expect(apiMock.get).toHaveBeenCalledWith("resume-2");
     expect(screen.getByRole("heading", { name: "其他简历版本" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "添加条目：跨版本项目" }));

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import mimetypes
+import warnings
 from contextlib import asynccontextmanager
 from io import BytesIO
 from pathlib import Path
@@ -47,6 +48,7 @@ from .settings import (
 async def lifespan(_: FastAPI):
     ensure_directories()
     db.init_db()
+    _reload_personal_library_from_uploads()
     yield
 
 
@@ -58,6 +60,34 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+def _reload_personal_library_from_uploads() -> int:
+    """Reparse saved imports on startup without overwriting edited resumes."""
+
+    source_documents: list[ResumeDocument] = []
+    for source_path in sorted(UPLOAD_DIR.iterdir()):
+        if source_path.suffix.lower() not in {".md", ".markdown", ".docx"}:
+            continue
+        document = db.get_resume(source_path.stem, include_deleted=True)
+        if document is None:
+            continue
+        try:
+            parsed = parse_resume(document.source.filename, source_path.read_bytes())
+        except (OSError, ValueError) as exc:
+            warnings.warn(
+                f"无法重新解析已保存的简历原件 {source_path.name}：{exc}",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            return 0
+        source_document = document.model_copy(deep=True)
+        source_document.sections = parsed.sections
+        source_documents.append(source_document)
+
+    if not source_documents:
+        return 0
+    return db.refresh_library_entries(source_documents)
 
 
 @app.exception_handler(db.RevisionConflictError)
@@ -257,7 +287,7 @@ def duplicate_resume(resume_id: str, request: DuplicateRequest) -> ResumeDocumen
     payload["source"] = {"filename": document.source.filename, "format": document.source.format}
     payload.pop("created_at", None)
     payload.pop("updated_at", None)
-    return db.create_resume(payload)
+    return db.create_resume(payload, capture_library=False)
 
 
 @app.post("/api/resumes/{resume_id}/photo", response_model=ResumeDocument)

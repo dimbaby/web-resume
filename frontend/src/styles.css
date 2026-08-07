@@ -1396,32 +1396,6 @@ textarea {
   padding: 20px 22px 17px;
 }
 
-.content-source-tabs {
-  background: white;
-  border-bottom: 1px solid #e0e7e3;
-  display: flex;
-  gap: 7px;
-  padding: 10px 22px 0;
-}
-
-.content-source-tabs button {
-  align-items: center;
-  background: transparent;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  color: #718078;
-  display: inline-flex;
-  font-size: 12px;
-  font-weight: 750;
-  gap: 6px;
-  padding: 7px 9px 9px;
-}
-
-.content-source-tabs button.selected {
-  border-bottom-color: #4c806b;
-  color: #315f4c;
-}
-
 .content-library-title {
   align-items: flex-start;
   display: flex;

@@ -29,6 +29,7 @@ const resumeDocument: ResumeDocument = {
       item_title_font_size_pt: 11.8,
       line_height: 1.34,
       paragraph_spacing_percent: 70,
+      name_contact_gap_mm: 4.5,
     },
   },
   sections: [],
@@ -76,6 +77,7 @@ describe("waitForImages", () => {
 
     render(<PagedPreview document={resumeDocument} onPageCount={onPageCount} />);
 
+    expect(onPageCount).toHaveBeenCalledWith(0);
     await waitFor(() => expect(previewMock).toHaveBeenCalledOnce());
     const stylesheets = previewMock.mock.calls[0][1] as Array<
       string | Record<string, string>

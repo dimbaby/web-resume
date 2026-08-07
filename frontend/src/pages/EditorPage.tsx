@@ -363,13 +363,15 @@ export function EditorPage() {
     setLibraryLoading(true);
     try {
       await flushSave();
-      const [entries, summaries] = await Promise.all([api.library(), api.list()]);
-      const otherSummaries = summaries.filter((summary) => summary.id !== id);
-      const versions = await Promise.all(
-        otherSummaries.map((summary) => api.get(summary.id)),
-      );
-      setLibraryEntries(entries);
-      setResumeVersions(versions);
+      if (sourceMode === "library") {
+        setLibraryEntries(await api.library());
+      } else {
+        const summaries = await api.list();
+        const otherSummaries = summaries.filter((summary) => summary.id !== id);
+        setResumeVersions(
+          await Promise.all(otherSummaries.map((summary) => api.get(summary.id))),
+        );
+      }
     } catch (reason) {
       setLibraryError(operationMessage(reason, "读取可选内容失败"));
     } finally {
@@ -654,10 +656,11 @@ export function EditorPage() {
         <button
           type="button"
           className="primary-button"
-          disabled={exporting}
+          disabled={exporting || pageCount === 0}
           onClick={downloadPdf}
         >
-          <Download size={16} /> {exporting ? "正在导出…" : "导出 PDF"}
+          <Download size={16} />
+          {exporting ? "正在导出…" : pageCount === 0 ? "正在排版…" : "导出 PDF"}
         </button>
       </header>
 
@@ -696,7 +699,7 @@ export function EditorPage() {
           document={document}
           entries={libraryEntries}
           versions={resumeVersions}
-          initialSource={contentSourceMode}
+          sourceMode={contentSourceMode}
           target={libraryTarget}
           loading={libraryLoading}
           error={libraryError}
@@ -867,7 +870,7 @@ export function EditorPage() {
             <details className="density-advanced">
               <summary>
                 <span>高级排版</span>
-                <span>页边距、字号与间距</span>
+                <span>页边距、页眉、字号与间距</span>
               </summary>
               <div className="density-slider-list">
                 <label className="density-slider">
@@ -959,6 +962,33 @@ export function EditorPage() {
                       })
                     }
                   />
+                </label>
+                <label className="density-slider">
+                  <span>
+                    姓名与联系方式间距
+                    <output>{appearance.density.name_contact_gap_mm.toFixed(1)} mm</output>
+                  </span>
+                  <input
+                    type="range"
+                    aria-label="姓名与联系方式间距"
+                    min={DENSITY_LIMITS.nameContactGapMm.min}
+                    max={DENSITY_LIMITS.nameContactGapMm.max}
+                    step={DENSITY_LIMITS.nameContactGapMm.step}
+                    value={appearance.density.name_contact_gap_mm}
+                    style={densityRangeStyle(
+                      appearance.density.name_contact_gap_mm,
+                      DENSITY_LIMITS.nameContactGapMm.min,
+                      DENSITY_LIMITS.nameContactGapMm.max,
+                    )}
+                    onChange={(event) =>
+                      updateDensity({
+                        name_contact_gap_mm: Number(event.target.value),
+                      })
+                    }
+                  />
+                  <small>
+                    向左调会同步缩小照片和页眉高度，让下方内容整体上移。
+                  </small>
                 </label>
                 <label className="density-slider font-size-slider">
                   <span>

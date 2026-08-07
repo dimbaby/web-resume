@@ -15,10 +15,13 @@
   white-space: pre-wrap;
 }
 
-/* Most Chinese system fonts do not provide a real italic face. Keep CJK glyphs
-   upright instead of letting the browser synthesize a distorted slant. */
-.resume-cjk-text {
-  font-style: normal;
+/* Chinese system fonts rarely ship a true italic face. Use a restrained
+   synthetic oblique angle so the italic control remains visible without the
+   excessive distortion of the browser default. */
+.resume-text-italic .resume-cjk-text,
+em .resume-cjk-text {
+  font-style: oblique 8deg;
+  font-synthesis: style;
 }
 
 .resume-header {
@@ -29,8 +32,8 @@
 }
 
 .resume-header.has-photo {
-  min-height: max(32.5mm, var(--resume-header-min-height, 34mm));
-  padding-right: 29mm;
+  min-height: var(--resume-header-min-height, 27.25mm);
+  padding-right: var(--resume-photo-padding-right, 24.25mm);
 }
 
 .resume-name {
@@ -52,9 +55,9 @@
 .resume-photo-frame {
   position: absolute;
   right: 0;
-  top: -5mm;
-  width: 27mm;
-  height: 37.5mm;
+  top: var(--resume-photo-top, -3.9mm);
+  width: var(--resume-photo-width, 22.25mm);
+  height: var(--resume-photo-height, 31.15mm);
   overflow: hidden;
   background: #eef1f1;
 }

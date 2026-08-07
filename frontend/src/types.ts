@@ -60,6 +60,7 @@ export type ResumeDensity = {
   item_title_font_size_pt: number;
   line_height: number;
   paragraph_spacing_percent: number;
+  name_contact_gap_mm: number;
 };
 
 export type ResumeAppearance = {

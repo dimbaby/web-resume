@@ -24,6 +24,7 @@ const document: ResumeDocument = {
       item_title_font_size_pt: 12,
       line_height: 1.52,
       paragraph_spacing_percent: 100,
+      name_contact_gap_mm: 7,
     },
   },
   sections: [
@@ -101,6 +102,7 @@ describe("ResumePreview", () => {
               item_title_font_size_pt: 11.1,
               line_height: 1.3,
               paragraph_spacing_percent: 60,
+              name_contact_gap_mm: 3,
             },
           },
         }}
@@ -113,7 +115,7 @@ describe("ResumePreview", () => {
     expect(article?.style.getPropertyValue("--resume-section-gap")).toBe("1.38mm");
   });
 
-  it("keeps CJK glyphs upright inside an italic mixed-language subtitle", () => {
+  it("marks CJK glyphs for controlled oblique styling in an italic subtitle", () => {
     const { container } = render(
       <ResumePreview
         document={{
@@ -136,13 +138,13 @@ describe("ResumePreview", () => {
     );
 
     const subtitle = container.querySelector(".resume-item-subtitle");
-    const uprightText = [...container.querySelectorAll(".resume-cjk-text")]
+    const cjkText = [...container.querySelectorAll(".resume-cjk-text")]
       .map((element) => element.textContent)
       .join("");
 
     expect(subtitle).toHaveClass("resume-text-italic");
-    expect(uprightText).toContain("京东物流");
-    expect(uprightText).toContain("｜");
+    expect(cjkText).toContain("京东物流");
+    expect(cjkText).toContain("｜");
     expect(subtitle).toHaveTextContent("京东物流 ｜ Submitted to AAAI 2027");
   });
 });

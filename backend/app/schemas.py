@@ -83,25 +83,30 @@ class ResumeDensity(BaseModel):
     item_title_font_size_pt: float = Field(default=12.0, ge=10.2, le=14.0)
     line_height: float = Field(default=1.52, ge=1.28, le=1.6)
     paragraph_spacing_percent: int = Field(default=100, ge=60, le=120)
+    name_contact_gap_mm: float = Field(default=7.0, ge=2.5, le=10.0)
 
 
-_LEGACY_TEMPLATE_DENSITY: dict[str, tuple[float, float, float]] = {
-    "reference": (10.9, 12.0, 1.52),
-    "ats": (10.4, 12.0, 1.45),
-    "modern": (10.9, 12.0, 1.52),
-    "compact": (9.8, 11.2, 1.38),
-    "elegant": (10.6, 12.0, 1.52),
+_LEGACY_TEMPLATE_DENSITY: dict[str, tuple[float, float, float, float]] = {
+    "reference": (10.9, 12.0, 1.52, 7.0),
+    "ats": (10.4, 12.0, 1.45, 7.0),
+    "modern": (10.9, 12.0, 1.52, 7.0),
+    "compact": (9.8, 11.2, 1.38, 5.0),
+    "elegant": (10.6, 12.0, 1.52, 7.0),
 }
 
 
 def _standard_density(template: str) -> ResumeDensity:
-    font_size, item_title_font_size, line_height = _LEGACY_TEMPLATE_DENSITY.get(
-        template, _LEGACY_TEMPLATE_DENSITY["reference"]
-    )
+    (
+        font_size,
+        item_title_font_size,
+        line_height,
+        name_contact_gap,
+    ) = _LEGACY_TEMPLATE_DENSITY.get(template, _LEGACY_TEMPLATE_DENSITY["reference"])
     return ResumeDensity(
         font_size_pt=font_size,
         item_title_font_size_pt=item_title_font_size,
         line_height=line_height,
+        name_contact_gap_mm=name_contact_gap,
     )
 
 
@@ -121,13 +126,25 @@ class ResumeAppearance(BaseModel):
             return migrated
         if isinstance(value, dict) and isinstance(value.get("density"), dict):
             density = value["density"]
+            template = str(value.get("template", "reference"))
+            legacy = _standard_density(template)
+            missing: dict[str, float] = {}
             if "item_title_font_size_pt" not in density:
-                template = str(value.get("template", "reference"))
-                legacy = _standard_density(template)
+                missing["item_title_font_size_pt"] = legacy.item_title_font_size_pt
+            if "name_contact_gap_mm" not in density:
+                try:
+                    spacing_scale = float(
+                        density.get("paragraph_spacing_percent", 100)
+                    ) / 100
+                except (TypeError, ValueError):
+                    spacing_scale = 1.0
+                scaled_gap = max(3.0, legacy.name_contact_gap_mm * spacing_scale)
+                missing["name_contact_gap_mm"] = round(scaled_gap * 2) / 2
+            if missing:
                 migrated = dict(value)
                 migrated["density"] = {
                     **density,
-                    "item_title_font_size_pt": legacy.item_title_font_size_pt,
+                    **missing,
                 }
                 return migrated
         return value

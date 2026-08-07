@@ -19,7 +19,7 @@ type Props = {
   document: ResumeDocument;
   entries: LibraryEntry[];
   versions?: ResumeDocument[];
-  initialSource?: ContentSourceMode;
+  sourceMode?: ContentSourceMode;
   target: ContentLibraryTarget;
   loading: boolean;
   error: string;
@@ -60,7 +60,7 @@ export function ContentLibraryDialog({
   document,
   entries,
   versions = [],
-  initialSource = "library",
+  sourceMode = "library",
   target,
   loading,
   error,
@@ -100,7 +100,6 @@ export function ContentLibraryDialog({
       ),
     [availableVersions],
   );
-  const [sourceMode, setSourceMode] = useState<ContentSourceMode>(initialSource);
   const [selectedVersionId, setSelectedVersionId] = useState(
     availableVersions[0]?.id ?? "",
   );
@@ -160,25 +159,6 @@ export function ContentLibraryDialog({
             <X size={19} />
           </button>
         </header>
-
-        <div className="content-source-tabs" role="group" aria-label="选择内容来源">
-          <button
-            type="button"
-            className={sourceMode === "library" ? "selected" : ""}
-            aria-pressed={sourceMode === "library"}
-            onClick={() => setSourceMode("library")}
-          >
-            <BookOpen size={14} /> 个人内容库
-          </button>
-          <button
-            type="button"
-            className={sourceMode === "versions" ? "selected" : ""}
-            aria-pressed={sourceMode === "versions"}
-            onClick={() => setSourceMode("versions")}
-          >
-            <Files size={14} /> 其他简历版本
-          </button>
-        </div>
 
         <div
           className={

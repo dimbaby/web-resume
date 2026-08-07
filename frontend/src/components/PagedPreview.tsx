@@ -50,9 +50,10 @@ export function PagedPreview({ document, onPageCount, onReady }: Props) {
 
   useEffect(() => {
     const run = ++runRef.current;
+    setRendering(true);
+    onPageCount?.(0);
     const timer = window.setTimeout(async () => {
       if (!sourceRef.current || !targetRef.current) return;
-      setRendering(true);
       const stagedTarget = window.document.createElement("div");
       Object.assign(stagedTarget.style, {
         position: "fixed",

@@ -12,6 +12,7 @@ from uuid import uuid4
 
 from pydantic import ValidationError
 
+from .content_repair import repair_legacy_split_document
 from .schemas import (
     LibraryEntry,
     ResumeDocument,
@@ -136,7 +137,9 @@ def _document_from_row(row: sqlite3.Row) -> ResumeDocument:
     payload = json.loads(row["payload"])
     payload["revision"] = int(row["revision"])
     payload["deleted_at"] = row["deleted_at"]
-    return ResumeDocument.model_validate(payload)
+    document = ResumeDocument.model_validate(payload)
+    repaired, _ = repair_legacy_split_document(document)
+    return repaired
 
 
 def _summary(document: ResumeDocument) -> ResumeSummary:
@@ -250,6 +253,35 @@ def _sync_all_resumes_to_library(connection: sqlite3.Connection) -> int:
         inserted += _sync_document_to_library(
             connection, _document_from_row(row)
         )
+    return inserted
+
+
+def refresh_library_entries(documents: list[ResumeDocument]) -> int:
+    """Atomically reconcile library snapshots for saved original imports."""
+
+    inserted = 0
+    with connect() as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        for document in documents:
+            expected_hashes = {
+                _library_content_hash(section.kind, item)
+                for section in document.sections
+                for item in section.items
+                if _item_has_content(item)
+            }
+            if expected_hashes:
+                placeholders = ", ".join("?" for _ in expected_hashes)
+                connection.execute(
+                    "DELETE FROM library_entries WHERE source_resume_id = ? "
+                    f"AND content_hash NOT IN ({placeholders})",
+                    [document.id, *sorted(expected_hashes)],
+                )
+            else:
+                connection.execute(
+                    "DELETE FROM library_entries WHERE source_resume_id = ?",
+                    (document.id,),
+                )
+            inserted += _sync_document_to_library(connection, document)
     return inserted
 
 
@@ -368,7 +400,9 @@ def save_resume(
     return saved
 
 
-def create_resume(payload: dict[str, Any]) -> ResumeDocument:
+def create_resume(
+    payload: dict[str, Any], *, capture_library: bool = True
+) -> ResumeDocument:
     now = utcnow()
     payload = dict(payload)
     payload["created_at"] = now
@@ -396,7 +430,8 @@ def create_resume(payload: dict[str, Any]) -> ResumeDocument:
                 document.updated_at.isoformat(),
             ),
         )
-        _sync_document_to_library(connection, document)
+        if capture_library:
+            _sync_document_to_library(connection, document)
     return document
 
 

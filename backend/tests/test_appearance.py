@@ -55,7 +55,9 @@ def test_old_appearance_without_density_keeps_template_metrics(
     assert document.appearance.density.preset == "standard"
     assert document.appearance.density.font_size_pt == font_size
     expected_item_title_size = 11.2 if template == "compact" else 12.0
+    expected_name_contact_gap = 5.0 if template == "compact" else 7.0
     assert document.appearance.density.item_title_font_size_pt == expected_item_title_size
+    assert document.appearance.density.name_contact_gap_mm == expected_name_contact_gap
     assert document.appearance.density.line_height == line_height
 
     with TestClient(main.app) as client:
@@ -65,6 +67,10 @@ def test_old_appearance_without_density_keeps_template_metrics(
     assert (
         payload["appearance"]["density"]["item_title_font_size_pt"]
         == expected_item_title_size
+    )
+    assert (
+        payload["appearance"]["density"]["name_contact_gap_mm"]
+        == expected_name_contact_gap
     )
     assert payload["appearance"]["density"]["line_height"] == line_height
 
@@ -95,8 +101,37 @@ def test_old_density_without_item_title_size_uses_template_default(
     )
 
     assert document.appearance.density.item_title_font_size_pt == 11.2
+    assert document.appearance.density.name_contact_gap_mm == 4.0
     assert document.appearance.density.font_size_pt == 9.8
     assert document.appearance.density.paragraph_spacing_percent == 80
+
+
+def test_legacy_reference_header_gap_uses_half_millimetre_step(
+    tmp_path, monkeypatch
+) -> None:
+    configure_storage(tmp_path, monkeypatch)
+    document = db.create_resume(
+        {
+            "id": "resume-legacy-reference-density",
+            "title": "旧版参考模板密度",
+            "appearance": {
+                "template": "reference",
+                "bullet_style": "triangle",
+                "density": {
+                    "preset": "custom",
+                    "page_margin_vertical_mm": 13,
+                    "page_margin_horizontal_mm": 13,
+                    "font_size_pt": 10.2,
+                    "line_height": 1.32,
+                    "paragraph_spacing_percent": 80,
+                },
+            },
+            "sections": [],
+            "source": {"filename": "fixture.md", "format": "md"},
+        }
+    )
+
+    assert document.appearance.density.name_contact_gap_mm == 5.5
 
 
 def test_density_round_trip_and_duplicate_are_independent(tmp_path, monkeypatch) -> None:
@@ -111,6 +146,7 @@ def test_density_round_trip_and_duplicate_are_independent(tmp_path, monkeypatch)
         "item_title_font_size_pt": 11.8,
         "line_height": 1.34,
         "paragraph_spacing_percent": 70,
+        "name_contact_gap_mm": 4.5,
     }
 
     with TestClient(main.app) as client:
@@ -147,6 +183,7 @@ def test_density_round_trip_and_duplicate_are_independent(tmp_path, monkeypatch)
         ("item_title_font_size_pt", 10.1),
         ("line_height", 1.27),
         ("paragraph_spacing_percent", 59),
+        ("name_contact_gap_mm", 2.4),
     ],
 )
 def test_density_rejects_values_below_readability_limits(

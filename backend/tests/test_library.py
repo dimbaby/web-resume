@@ -238,6 +238,173 @@ def test_library_does_not_capture_partial_editor_versions_when_opened(
     assert len(db.list_library_entries()) == 1
 
 
+def test_duplicate_does_not_add_edited_version_snapshot_to_library(
+    tmp_path, monkeypatch
+) -> None:
+    configure_database(tmp_path, monkeypatch)
+    document = create_resume("source")
+    changed = document.model_copy(deep=True)
+    changed.sections[0].items[0].bullets[0].content = [
+        RichTextSpan(text="只存在于岗位版本的修改")
+    ]
+    saved = db.save_resume(changed)
+
+    with TestClient(main.app) as client:
+        response = client.post(
+            f"/api/resumes/{saved.id}/duplicate",
+            json={"title": "岗位定制版"},
+        )
+
+    assert response.status_code == 200
+    assert len(db.list_library_entries()) == 1
+    assert db.list_library_entries(query="只存在于岗位版本的修改") == []
+
+
+def test_loading_resume_repairs_legacy_year_ending_italic_subtitle(
+    tmp_path, monkeypatch
+) -> None:
+    configure_database(tmp_path, monkeypatch)
+    document = db.create_resume(
+        {
+            "id": "legacy-split",
+            "title": "旧解析结果",
+            "sections": [
+                {
+                    "id": "projects",
+                    "kind": "project",
+                    "title": "项目经历",
+                    "items": [
+                        {
+                            "id": "heading",
+                            "title": rich("DEC-Graph RAG", bold=True),
+                            "subtitle": [],
+                            "date": "2026.04-2026.08",
+                            "bullets": [],
+                        },
+                        {
+                            "id": "false-item",
+                            "title": [
+                                {
+                                    "text": "京东物流 ｜ Submitted to AAAI",
+                                    "bold": False,
+                                    "italic": True,
+                                }
+                            ],
+                            "subtitle": [],
+                            "date": "2027",
+                            "bullets": [
+                                {
+                                    "id": "result",
+                                    "content": rich("完整项目要点"),
+                                }
+                            ],
+                        },
+                    ],
+                }
+            ],
+            "source": {"filename": "resume.md", "format": "md"},
+        }
+    )
+
+    loaded = db.get_resume(document.id)
+
+    assert loaded is not None
+    assert len(loaded.sections[0].items) == 1
+    repaired = loaded.sections[0].items[0]
+    assert "".join(span.text for span in repaired.subtitle) == (
+        "京东物流 ｜ Submitted to AAAI 2027"
+    )
+    assert repaired.date == "2026.04-2026.08"
+    assert repaired.bullets[0].content[0].text == "完整项目要点"
+
+
+def test_startup_reparses_saved_upload_for_library_without_overwriting_editor(
+    tmp_path, monkeypatch
+) -> None:
+    configure_database(tmp_path, monkeypatch)
+    upload_dir = tmp_path / "uploads"
+    upload_dir.mkdir()
+    monkeypatch.setattr(main, "UPLOAD_DIR", upload_dir)
+    document = create_resume(
+        "saved-source",
+        resume_item=item(
+            "edited-item",
+            "网页中编辑后的项目",
+            "网页中编辑后的要点",
+        ),
+    )
+    (upload_dir / f"{document.id}.md").write_text(
+        "\n".join(
+            [
+                "# 测试用户",
+                "## 项目经历",
+                "**重新识别项目** 2026.04-2026.08",
+                "*京东物流 ｜ Submitted to AAAI 2027*",
+                "- 重新识别的完整要点",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    with TestClient(main.app) as client:
+        library = client.get("/api/library").json()
+        stored = client.get(f"/api/resumes/{document.id}").json()
+
+    assert len(library) == 1
+    assert library[0]["item"]["title"][0]["text"] == "重新识别项目"
+    assert library[0]["item"]["subtitle"][0]["text"] == (
+        "京东物流 ｜ Submitted to AAAI 2027"
+    )
+    assert len(library[0]["item"]["bullets"]) == 1
+    assert stored["sections"][0]["items"][0]["title"][0]["text"] == (
+        "网页中编辑后的项目"
+    )
+
+    source_path = upload_dir / f"{document.id}.md"
+    source_path.write_text(
+        source_path.read_text(encoding="utf-8").replace(
+            "重新识别项目", "第二次启动重新识别项目"
+        ),
+        encoding="utf-8",
+    )
+    with TestClient(main.app) as client:
+        refreshed = client.get("/api/library").json()
+        stored_again = client.get(f"/api/resumes/{document.id}").json()
+
+    assert refreshed[0]["item"]["title"][0]["text"] == (
+        "第二次启动重新识别项目"
+    )
+    assert stored_again["sections"][0]["items"][0]["title"][0]["text"] == (
+        "网页中编辑后的项目"
+    )
+
+
+def test_refreshing_import_library_preserves_unrelated_history(
+    tmp_path, monkeypatch
+) -> None:
+    configure_database(tmp_path, monkeypatch)
+    source = create_resume(
+        "refresh-source",
+        resume_item=item("old", "旧识别项目", "旧识别要点"),
+    )
+    create_resume(
+        "unrelated-history",
+        resume_item=item("unrelated", "保留的历史项目", "保留的历史要点"),
+    )
+    refreshed = source.model_copy(deep=True)
+    refreshed_item = refreshed.sections[0].items[0]
+    refreshed_item.id = "new"
+    refreshed_item.title = [RichTextSpan(text="重新识别项目")]
+    refreshed_item.bullets[0].content = [RichTextSpan(text="重新识别要点")]
+    refreshed.sections[0].items = [refreshed_item]
+
+    db.refresh_library_entries([refreshed])
+
+    assert db.list_library_entries(query="旧识别项目") == []
+    assert len(db.list_library_entries(query="重新识别项目")) == 1
+    assert len(db.list_library_entries(query="保留的历史项目")) == 1
+
+
 def test_database_backup_contains_library_entries(tmp_path, monkeypatch) -> None:
     configure_database(tmp_path, monkeypatch)
     create_resume("backed-up")

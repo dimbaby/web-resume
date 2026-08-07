@@ -33,6 +33,7 @@ const document: ResumeDocument = {
       item_title_font_size_pt: 12,
       line_height: 1.52,
       paragraph_spacing_percent: 100,
+      name_contact_gap_mm: 7,
     },
   },
   sections: [
